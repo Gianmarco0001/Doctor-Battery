@@ -688,9 +688,13 @@ struct MacDetailView: View {
             } else if !s.isCharging, let t = s.timeToEmptyMin {
                 DBKVRow(label: NSLocalizedString("Tempo a esaurimento (IOKit)", comment: ""), value: formatMinutes(t))
             }
-            if !s.isCharging, let avgW = vm.macWattageMovingAvg(window: 600), avgW < -0.1 {
+            if !s.isCharging, let avgW = vm.macWattageMovingAvg(window: 600), avgW < -1.0 {
                 let hoursLeft = (Double(s.currentCapacity) * s.voltageV / 1000.0) / abs(avgW)
-                DBKVRow(label: NSLocalizedString("Stima ETA (10 min media)", comment: ""), value: formatHoursDecimal(hoursLeft), valueColor: .dbAccent2)
+                if hoursLeft < 48 {
+                    DBKVRow(label: NSLocalizedString("Stima ETA (10 min media)", comment: ""),
+                            value: formatHoursDecimal(hoursLeft),
+                            valueColor: .dbAccent2)
+                }
             }
         }
         .dbCard()
