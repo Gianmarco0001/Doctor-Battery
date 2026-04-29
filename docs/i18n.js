@@ -73,6 +73,12 @@ window.__I18N__ = {
       sub: "Pure Swift + SwiftUI + Swift Charts. No third-party dependencies. ~1300 LOC.",
       meta: "MIT License · Made with care for batteries everywhere."
     },
+    contact: {
+      eyebrow: "/* contact */",
+      title: "Get in touch.",
+      sub: "Found a bug, want a feature, or just want to say hi?",
+      email: "Email", donate: "Donate", donateSub: "Support development"
+    },
     footer: "Not affiliated with any device manufacturer · MIT License · Built with ♥ for transparency."
   },
 
@@ -149,6 +155,12 @@ window.__I18N__ = {
       sub: "Pure Swift + SwiftUI + Swift Charts. Nessuna dipendenza esterna. ~1300 LOC.",
       meta: "Licenza MIT · Fatto con cura per le batterie di tutti."
     },
+    contact: {
+      eyebrow: "/* contatti */",
+      title: "Mettiamoci in contatto.",
+      sub: "Bug, richiesta di feature, o solo un saluto?",
+      email: "Email", donate: "Donazione", donateSub: "Supporta lo sviluppo"
+    },
     footer: "Non affiliato a nessun produttore di dispositivi · Licenza MIT · Costruito con ♥ per la trasparenza."
   },
 
@@ -218,6 +230,12 @@ window.__I18N__ = {
       title: "Compiler depuis les sources.",
       sub: "Pure Swift + SwiftUI + Swift Charts. Aucune dépendance externe. ~1300 LOC.",
       meta: "Licence MIT · Fait avec soin pour toutes les batteries."
+    },
+    contact: {
+      eyebrow: "/* contact */",
+      title: "Contactez-moi.",
+      sub: "Un bug, une demande de fonctionnalité ou juste un bonjour ?",
+      email: "Email", donate: "Faire un don", donateSub: "Soutenir le développement"
     },
     footer: "Non affilié à un fabricant · Licence MIT · Construit avec ♥ pour la transparence."
   },
@@ -289,6 +307,12 @@ window.__I18N__ = {
       sub: "Pure Swift + SwiftUI + Swift Charts. Sin dependencias externas. ~1300 LOC.",
       meta: "Licencia MIT · Hecho con cariño para baterías de todo el mundo."
     },
+    contact: {
+      eyebrow: "/* contacto */",
+      title: "Ponte en contacto.",
+      sub: "¿Un bug, una idea o solo saludar?",
+      email: "Correo", donate: "Donar", donateSub: "Apoya el desarrollo"
+    },
     footer: "No afiliado a ningún fabricante · Licencia MIT · Construido con ♥ por la transparencia."
   },
 
@@ -358,6 +382,12 @@ window.__I18N__ = {
       title: "Aus Quellcode bauen.",
       sub: "Pure Swift + SwiftUI + Swift Charts. Keine Drittanbieter-Abhängigkeiten. ~1300 LOC.",
       meta: "MIT-Lizenz · Mit Sorgfalt für Akkus überall gemacht."
+    },
+    contact: {
+      eyebrow: "/* kontakt */",
+      title: "Kontakt aufnehmen.",
+      sub: "Bug, Feature-Wunsch oder einfach Hallo?",
+      email: "E-Mail", donate: "Spenden", donateSub: "Entwicklung unterstützen"
     },
     footer: "Mit keinem Hersteller verbunden · MIT-Lizenz · Mit ♥ für Transparenz gebaut."
   }

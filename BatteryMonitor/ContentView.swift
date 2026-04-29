@@ -501,6 +501,7 @@ struct MacDetailView: View {
                              timestamp: s.timestamp,
                              onRefresh: { vm.refreshAll() })
                     heroSection(s)
+                    forecastSection(deviceId: "mac", label: "Mac")
                     chargeCard(s)
                     healthCard(s)
                     powerCard(s)
@@ -568,6 +569,32 @@ struct MacDetailView: View {
                     .foregroundStyle(s.temperatureC < 35 ? Color.dbAccent :
                                      s.temperatureC < 40 ? Color.dbWarn : Color.dbBad)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func forecastSection(deviceId: String, label: String) -> some View {
+        let pts = HistoryStore.shared.points(deviceId: deviceId,
+                                             since: Date().addingTimeInterval(-365 * 86400))
+        if let f = HealthAnalytics.forecast(points: pts) {
+            ForecastCard(label: label, forecast: f, points: pts)
+        } else {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text(NSLocalizedString("Previsione salute", comment: ""))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.dbText)
+                    Spacer()
+                    Text("12 mesi · regressione lineare")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Color.dbText3)
+                }
+                Text(NSLocalizedString("In raccolta dati… (uno snapshot ogni 5 minuti)", comment: ""))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.dbText3)
+                    .frame(maxWidth: .infinity, minHeight: 100, alignment: .leading)
+            }
+            .dbCard()
         }
     }
 
