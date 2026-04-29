@@ -3,7 +3,7 @@ window.__I18N__ = {
   en: {
     nav: { features: "Features", preview: "Preview", download: "Download", source: "GitHub" },
     hero: {
-      badge: "v1.4 — universal binary, signed",
+      badge: "v1.0 — universal binary, signed",
       title: ["Free", "battery", "diagnostics", "for Mac,", "iPhone", "&", "iPad."],
       sub: "Open-source. No telemetry. Every byte stays on your Mac.",
       cta1: "Download for macOS",
@@ -62,8 +62,8 @@ window.__I18N__ = {
       eyebrow: "/* download */",
       title: "One click to install.",
       sub: "Pre-built universal binary on GitHub Releases.",
-      btn: "Latest release · v1.4.0",
-      meta: "macOS 13+ · ~6.4 MB · SHA256 verified",
+      btn: "Latest release · v1.0.0",
+      meta: "macOS 13+ · ~2 MB · universal binary",
       i1t: "First launch", i1b: "The app is signed ad-hoc, so Gatekeeper warns on first launch. Right-click the .app → Open → confirm. macOS remembers the choice.",
       i2t: "iOS / iPadOS support", i2b: "Install libimobiledevice, then connect & trust your device once."
     },
@@ -85,7 +85,7 @@ window.__I18N__ = {
   it: {
     nav: { features: "Funzioni", preview: "Anteprima", download: "Download", source: "GitHub" },
     hero: {
-      badge: "v1.4 — universal binary, firmato",
+      badge: "v1.0 — universal binary, firmato",
       title: ["Diagnostica", "batteria", "gratuita", "per Mac,", "iPhone", "e", "iPad."],
       sub: "Open source. Nessuna telemetria. Tutto resta sul tuo Mac.",
       cta1: "Scarica per macOS",
@@ -144,8 +144,8 @@ window.__I18N__ = {
       eyebrow: "/* download */",
       title: "Un click e sei a posto.",
       sub: "Universal binary pre-compilato su GitHub Releases.",
-      btn: "Ultima release · v1.4.0",
-      meta: "macOS 13+ · ~6.4 MB · SHA256 verificato",
+      btn: "Ultima release · v1.0.0",
+      meta: "macOS 13+ · ~2 MB · universal binary",
       i1t: "Primo avvio", i1b: "L'app è firmata ad-hoc, quindi Gatekeeper avvisa al primo avvio. Click destro sull'.app → Apri → conferma. macOS ricorderà la scelta.",
       i2t: "Supporto iOS / iPadOS", i2b: "Installa libimobiledevice, poi connetti e autorizza il dispositivo."
     },
@@ -167,7 +167,7 @@ window.__I18N__ = {
   fr: {
     nav: { features: "Fonctions", preview: "Aperçu", download: "Téléchargement", source: "GitHub" },
     hero: {
-      badge: "v1.4 — universal binary, signé",
+      badge: "v1.0 — universal binary, signé",
       title: ["Diagnostic", "de batterie", "gratuit", "pour Mac,", "iPhone", "et", "iPad."],
       sub: "Open source. Aucune télémétrie. Tout reste sur votre Mac.",
       cta1: "Télécharger pour macOS",
@@ -220,8 +220,8 @@ window.__I18N__ = {
       eyebrow: "/* download */",
       title: "Un clic et c'est installé.",
       sub: "Universal binary pré-compilé sur GitHub Releases.",
-      btn: "Dernière release · v1.4.0",
-      meta: "macOS 13+ · ~6.4 Mo · SHA256 vérifié",
+      btn: "Dernière release · v1.0.0",
+      meta: "macOS 13+ · ~2 Mo · universal binary",
       i1t: "Premier lancement", i1b: "L'app est signée ad-hoc, donc Gatekeeper avertit au premier lancement. Clic droit sur l'.app → Ouvrir → confirmer. macOS retient le choix.",
       i2t: "Support iOS / iPadOS", i2b: "Installez libimobiledevice, puis connectez et autorisez l'appareil."
     },
@@ -243,7 +243,7 @@ window.__I18N__ = {
   es: {
     nav: { features: "Funciones", preview: "Vista", download: "Descargas", source: "GitHub" },
     hero: {
-      badge: "v1.4 — universal binary, firmado",
+      badge: "v1.0 — universal binary, firmado",
       title: ["Diagnóstico", "de batería", "gratis", "para Mac,", "iPhone", "y", "iPad."],
       sub: "Código abierto. Sin telemetría. Todo se queda en tu Mac.",
       cta1: "Descargar para macOS",
@@ -296,8 +296,8 @@ window.__I18N__ = {
       eyebrow: "/* download */",
       title: "Un clic e instalado.",
       sub: "Universal binary pre-compilado en GitHub Releases.",
-      btn: "Última release · v1.4.0",
-      meta: "macOS 13+ · ~6.4 MB · SHA256 verificado",
+      btn: "Última release · v1.0.0",
+      meta: "macOS 13+ · ~2 MB · universal binary",
       i1t: "Primer arranque", i1b: "La app está firmada ad-hoc, así Gatekeeper avisa al primer arranque. Click derecho en .app → Abrir → confirmar. macOS recuerda la elección.",
       i2t: "Soporte iOS / iPadOS", i2b: "Instala libimobiledevice, luego conecta y autoriza el dispositivo."
     },
@@ -319,7 +319,7 @@ window.__I18N__ = {
   de: {
     nav: { features: "Funktionen", preview: "Vorschau", download: "Download", source: "GitHub" },
     hero: {
-      badge: "v1.4 — universal binary, signiert",
+      badge: "v1.0 — universal binary, signiert",
       title: ["Kostenlose", "Akku-", "Diagnose", "für Mac,", "iPhone", "&", "iPad."],
       sub: "Open Source. Keine Telemetrie. Alles bleibt auf deinem Mac.",
       cta1: "Für macOS laden",
@@ -372,8 +372,8 @@ window.__I18N__ = {
       eyebrow: "/* download */",
       title: "Ein Klick zum Installieren.",
       sub: "Vorgefertigte Universal Binary auf GitHub Releases.",
-      btn: "Neueste Version · v1.4.0",
-      meta: "macOS 13+ · ~6.4 MB · SHA256 verifiziert",
+      btn: "Neueste Version · v1.0.0",
+      meta: "macOS 13+ · ~2 MB · universal binary",
       i1t: "Erster Start", i1b: "Die App ist ad-hoc signiert, also warnt Gatekeeper beim ersten Start. Rechtsklick auf .app → Öffnen → bestätigen. macOS merkt sich das.",
       i2t: "iOS- / iPadOS-Support", i2b: "Installiere libimobiledevice, dann verbinde und vertraue dem Gerät einmal."
     },
