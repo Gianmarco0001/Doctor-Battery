@@ -76,7 +76,7 @@ enum BatteryReader {
         let nominal = design > 0
             ? min(100.0, Double(curCap) / Double(maxCap == 0 ? design : maxCap) * 100.0)
             : 0
-        let health = design > 0 ? Double(maxCap) / Double(design) * 100.0 : 0
+        let health = design > 0 ? min(100.0, Double(maxCap) / Double(design) * 100.0) : 0
 
         let mfgDate = decodeManufactureDate(props["ManufactureDate"] as? Int)
         let firstUse = decodeFirstUseDate(props)

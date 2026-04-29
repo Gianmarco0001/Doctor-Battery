@@ -141,7 +141,7 @@ enum IOSDeviceReader {
                 }
             }
             if let d = design, d > 0, let n = nominal {
-                health = Double(n) / Double(d) * 100.0
+                health = min(100.0, Double(n) / Double(d) * 100.0)
             }
         }
 

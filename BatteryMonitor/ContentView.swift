@@ -1018,7 +1018,7 @@ struct CompareView: View {
     private var healthChartCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             DBSectionHeader(title: NSLocalizedString("Trend salute", comment: ""), icon: "heart.text.square.fill")
-            chartView(plotChargeNotHealth: false, height: 220, yDomain: 60...100)
+            chartView(plotChargeNotHealth: false, height: 220, yDomain: 60...105)
         }
         .dbCard()
     }
@@ -1039,6 +1039,7 @@ struct CompareView: View {
                 .foregroundStyle(Color.dbText3)
                 .frame(maxWidth: .infinity, minHeight: height / 2)
         } else {
+            let showSymbols = range == .week || range == .month || range == .all
             Chart {
                 ForEach(data, id: \.deviceId) { series in
                     ForEach(series.points, id: \.timestamp) { p in
@@ -1046,10 +1047,14 @@ struct CompareView: View {
                             LineMark(x: .value("t", p.timestamp), y: .value("%", c))
                                 .foregroundStyle(by: .value("Device", series.label))
                                 .interpolationMethod(.linear)
+                                .symbol(showSymbols ? .circle : .square)
+                                .symbolSize(showSymbols ? 24 : 0)
                         } else if !plotChargeNotHealth, let h = p.healthPercent {
                             LineMark(x: .value("t", p.timestamp), y: .value("%", h))
                                 .foregroundStyle(by: .value("Device", series.label))
                                 .interpolationMethod(.linear)
+                                .symbol(showSymbols ? .circle : .square)
+                                .symbolSize(showSymbols ? 24 : 0)
                         }
                     }
                 }
@@ -1150,7 +1155,7 @@ struct ForecastCard: View {
                         .lineStyle(StrokeStyle(lineWidth: 1.6))
                 }
             }
-            .chartYScale(domain: max(60, forecast.currentHealth - 10)...100)
+            .chartYScale(domain: max(60, forecast.currentHealth - 10)...105)
             .frame(height: 180)
         } else {
             Text(NSLocalizedString("Dati insufficienti per la previsione", comment: ""))
@@ -1215,6 +1220,7 @@ struct HistoryCard: View {
                     .foregroundStyle(Color.dbText3)
                     .frame(maxWidth: .infinity, minHeight: 80)
             } else {
+                let showSymbols = range == .week || range == .month || range == .all
                 Chart {
                     ForEach(points.filter { $0.chargePercent != nil }, id: \.timestamp) { p in
                         LineMark(x: .value("t", p.timestamp),
@@ -1222,6 +1228,8 @@ struct HistoryCard: View {
                                  series: .value("s", "charge"))
                             .foregroundStyle(by: .value("Serie", "Carica %"))
                             .interpolationMethod(.linear)
+                            .symbol(showSymbols ? .circle : .square)
+                            .symbolSize(showSymbols ? 18 : 0)
                     }
                     ForEach(points.filter { $0.healthPercent != nil }, id: \.timestamp) { p in
                         LineMark(x: .value("t", p.timestamp),
@@ -1229,13 +1237,15 @@ struct HistoryCard: View {
                                  series: .value("s", "health"))
                             .foregroundStyle(by: .value("Serie", "Salute %"))
                             .interpolationMethod(.linear)
+                            .symbol(showSymbols ? .circle : .square)
+                            .symbolSize(showSymbols ? 18 : 0)
                     }
                 }
                 .chartForegroundStyleScale([
                     "Carica %": Color.dbAccent2,
                     "Salute %": Color.dbAccent
                 ])
-                .chartYScale(domain: 0...100)
+                .chartYScale(domain: 0...105)
                 .frame(height: 160)
             }
         }
