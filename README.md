@@ -35,6 +35,8 @@ Build options:
 - `UNIVERSAL=0 ./build.sh` builds for the host architecture only (faster).
 - Default builds a universal arm64 + x86_64 binary.
 
+> **Note on Intel Macs**: the universal binary is produced via `lipo` and includes both arm64 and x86_64 slices, but it has only been tested on Apple Silicon. It should work on Intel since none of the APIs used are Apple Silicon-only, but reports from Intel users are welcome — please open an issue if you try it.
+
 ## iOS / iPadOS support
 
 Install libimobiledevice (Homebrew):
