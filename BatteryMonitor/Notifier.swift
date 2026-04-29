@@ -63,6 +63,12 @@ final class Notifier {
              body: "\(deviceName): -\(String(format: "%.1f", anomaly.deltaPercent)) % / \(anomaly.windowDays)d")
     }
 
+    func calibrationReminder(days: Int) {
+        fire(key: "mac.calibration",
+             title: NSLocalizedString("Calibrazione consigliata", comment: ""),
+             body: NSLocalizedString("Una scarica completa + ricarica al 100% aiuta il gas-gauge a ricalibrarsi.", comment: ""))
+    }
+
     private func fire(key: String, title: String, body: String, noCooldown: Bool = false) {
         if !noCooldown, let last = lastFiredKey[key], Date().timeIntervalSince(last) < cooldown { return }
         lastFiredKey[key] = Date()

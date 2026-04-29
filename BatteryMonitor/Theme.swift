@@ -117,6 +117,52 @@ struct DBAurora: View {
     }
 }
 
+struct DBStatCard<Content: View>: View {
+    let label: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.4)
+                .foregroundStyle(Color.dbText3)
+                .textCase(.uppercase)
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.dbSurface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.dbBorder, lineWidth: 1)
+        )
+    }
+}
+
+struct DBMiniRing: View {
+    let percent: Double
+    var size: CGFloat = 36
+    var color: Color = .dbAccent
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.white.opacity(0.06), lineWidth: 5)
+            Circle()
+                .trim(from: 0, to: max(0, min(1, percent / 100)))
+                .stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .shadow(color: color.opacity(0.55), radius: 6)
+                .animation(.easeInOut(duration: 0.6), value: percent)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
 struct DBChargeGauge: View {
     let percent: Double
     let charging: Bool
@@ -162,6 +208,70 @@ struct DBChargeGauge: View {
             }
         }
         .frame(width: size, height: size)
+    }
+}
+
+struct DBSquareIcon: View {
+    let symbol: String
+    var color: Color = .dbText2
+    var size: CGFloat = 32
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color.dbSurface2)
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Color.dbBorder, lineWidth: 1)
+            Image(systemName: symbol)
+                .font(.system(size: size * 0.45, weight: .medium))
+                .foregroundStyle(color)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+enum SystemInfo {
+    static let macChip: String = {
+        var size: size_t = 0
+        sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
+        guard size > 0 else { return "Mac" }
+        var buf = [CChar](repeating: 0, count: size)
+        sysctlbyname("machdep.cpu.brand_string", &buf, &size, nil, 0)
+        let raw = String(cString: buf)
+        if let r = raw.range(of: "Apple ") {
+            return String(raw[r.upperBound...]).trimmingCharacters(in: .whitespaces)
+        }
+        if raw.contains("Intel") { return "Intel" }
+        return raw.components(separatedBy: " ").first ?? "Mac"
+    }()
+
+    static func iosChip(productType: String) -> String? {
+        let map: [String: String] = [
+            "iPhone16,2": "A17 Pro", "iPhone16,1": "A17 Pro",
+            "iPhone15,5": "A16", "iPhone15,4": "A16",
+            "iPhone15,3": "A16", "iPhone15,2": "A16",
+            "iPhone14,8": "A15", "iPhone14,7": "A15",
+            "iPhone14,6": "A15", "iPhone14,5": "A15",
+            "iPhone14,4": "A15", "iPhone14,3": "A15",
+            "iPhone14,2": "A15",
+            "iPhone13,4": "A14", "iPhone13,3": "A14",
+            "iPhone13,2": "A14", "iPhone13,1": "A14",
+            "iPhone12,8": "A13", "iPhone12,5": "A13",
+            "iPhone12,3": "A13", "iPhone12,1": "A13",
+            "iPad14,11": "M4", "iPad14,10": "M4",
+            "iPad14,6": "M2", "iPad14,5": "M2",
+            "iPad14,4": "M2", "iPad14,3": "M2",
+            "iPad13,18": "A15", "iPad13,17": "A15",
+            "iPad13,11": "M1", "iPad13,10": "M1",
+            "iPad13,9": "M1", "iPad13,8": "M1",
+            "iPad13,7": "M1", "iPad13,6": "M1",
+            "iPad13,5": "M1", "iPad13,4": "M1",
+            "iPad13,2": "A14", "iPad13,1": "A14",
+            "iPad12,2": "A13", "iPad12,1": "A13",
+            "iPad11,7": "A12", "iPad11,6": "A12",
+            "iPad11,4": "A12", "iPad11,3": "A12",
+            "iPad11,2": "A12", "iPad11,1": "A12"
+        ]
+        return map[productType]
     }
 }
 

@@ -21,12 +21,14 @@ final class AppViewModel: ObservableObject {
     private var fastTimer: Timer?
     private var slowTimer: Timer?
     private var loggingTimer: Timer?
+    private var anomalyTimer: Timer?
     private var lastLoggedMac: Date = .distantPast
     private var lastLoggedIOS: [String: Date] = [:]
     private let logInterval: TimeInterval = 5 * 60
     private let iosQueue = DispatchQueue(label: "doctorbattery.ios", qos: .userInitiated)
     private var iosRefreshInFlight = false
     private var deviceScanInFlight = false
+    private var lastAnomalyCheck: Date = .distantPast
 
     init() {
         refreshAll()
@@ -40,13 +42,54 @@ final class AppViewModel: ObservableObject {
         let log = Timer(timeInterval: 30.0, repeats: true) { [weak self] _ in
             self?.maybeLog()
         }
+        let anomaly = Timer(timeInterval: 600.0, repeats: true) { [weak self] _ in
+            self?.checkAnomalies()
+        }
         RunLoop.main.add(fast, forMode: .common)
         RunLoop.main.add(slow, forMode: .common)
         RunLoop.main.add(log, forMode: .common)
-        fastTimer = fast; slowTimer = slow; loggingTimer = log
+        RunLoop.main.add(anomaly, forMode: .common)
+        fastTimer = fast; slowTimer = slow; loggingTimer = log; anomalyTimer = anomaly
     }
 
-    deinit { fastTimer?.invalidate(); slowTimer?.invalidate(); loggingTimer?.invalidate() }
+    deinit {
+        fastTimer?.invalidate(); slowTimer?.invalidate()
+        loggingTimer?.invalidate(); anomalyTimer?.invalidate()
+    }
+
+    func checkAnomalies() {
+        let threshold = SettingsModel.shared.healthAnomalyThreshold
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self = self else { return }
+            let macPts = HistoryStore.shared.points(deviceId: "mac",
+                since: Date().addingTimeInterval(-30 * 86400))
+            if let a = HealthAnalytics.anomaly(points: macPts, windowDays: 7,
+                                               deltaThreshold: threshold) {
+                DispatchQueue.main.async { Notifier.shared.anomalyAlert(deviceName: "Mac", anomaly: a) }
+            }
+            for d in self.iosDevices {
+                let pts = HistoryStore.shared.points(deviceId: d.udid,
+                    since: Date().addingTimeInterval(-30 * 86400))
+                if let a = HealthAnalytics.anomaly(points: pts, windowDays: 7,
+                                                   deltaThreshold: threshold) {
+                    DispatchQueue.main.async { Notifier.shared.anomalyAlert(deviceName: d.name, anomaly: a) }
+                }
+            }
+
+            if SettingsModel.shared.calibrationNotify, let last = self.lastFullDischarge {
+                let days = Date().timeIntervalSince(last) / 86400
+                if days > 30 {
+                    DispatchQueue.main.async { Notifier.shared.calibrationReminder(days: Int(days)) }
+                }
+            } else if SettingsModel.shared.calibrationNotify, self.lastFullDischarge == nil {
+                let macPts = HistoryStore.shared.points(deviceId: "mac",
+                    since: Date().addingTimeInterval(-90 * 86400))
+                if macPts.count > 50 {
+                    DispatchQueue.main.async { Notifier.shared.calibrationReminder(days: 30) }
+                }
+            }
+        }
+    }
 
     func refreshAll() {
         let mac = BatteryReader.read()
@@ -200,40 +243,12 @@ struct DBSidebar: View {
             Divider().background(Color.dbBorder)
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    sectionHeader("MAC")
-                    item(label: NSLocalizedString("Questo Mac", comment: ""),
-                         icon: "laptopcomputer",
-                         badge: vm.macSnapshot.map { String(format: "%.0f%%", $0.nominalChargePercent) },
-                         selected: vm.selection == .mac) {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    sectionHeader("DISPOSITIVI")
+                    macRow(vm.macSnapshot, selected: vm.selection == .mac) {
                         vm.selection = .mac
                     }
-
-                    sectionHeader(NSLocalizedString("Confronto", comment: "").uppercased())
-                    item(label: NSLocalizedString("Tutti i dispositivi", comment: ""),
-                         icon: "chart.line.uptrend.xyaxis",
-                         badge: nil,
-                         selected: vm.selection == .compare) {
-                        vm.selection = .compare
-                    }
-
-                    sectionHeader("iOS / iPADOS")
-                    if vm.libimobileMissing {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(NSLocalizedString("libimobiledevice non installato", comment: ""))
-                                .font(.system(size: 11))
-                                .foregroundStyle(Color.dbWarn)
-                            Text("brew install libimobiledevice")
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundStyle(Color.dbText3)
-                        }
-                        .padding(.horizontal, 10)
-                    } else if vm.iosDevices.isEmpty {
-                        Text(NSLocalizedString("Nessun dispositivo", comment: ""))
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.dbText3)
-                            .padding(.horizontal, 10)
-                    } else {
+                    if !vm.libimobileMissing {
                         ForEach(vm.iosDevices) { dev in
                             iosItem(dev: dev,
                                     snap: vm.iosSnapshots[dev.udid],
@@ -241,6 +256,27 @@ struct DBSidebar: View {
                                 vm.selection = .ios(dev.udid)
                             }
                         }
+                    }
+                    if vm.libimobileMissing {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(NSLocalizedString("libimobiledevice non installato", comment: ""))
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color.dbWarn)
+                            Text("brew install libimobiledevice")
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(Color.dbText3)
+                        }
+                        .padding(.horizontal, 24)
+                    } else if vm.iosDevices.isEmpty {
+                        Text(NSLocalizedString("Nessun dispositivo", comment: ""))
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color.dbText3)
+                            .padding(.horizontal, 24)
+                    }
+
+                    sectionHeader(NSLocalizedString("Confronto", comment: "").uppercased())
+                    compareRow(selected: vm.selection == .compare) {
+                        vm.selection = .compare
                     }
                 }
                 .padding(.vertical, 14)
@@ -273,48 +309,75 @@ struct DBSidebar: View {
             .padding(.trailing, 16)
     }
 
-    private func item(label: String, icon: String, badge: String?, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func macRow(_ snap: BatterySnapshot?, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 18)
-                Text(label)
-                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
-                    .lineLimit(1)
+                DBSquareIcon(symbol: "laptopcomputer", color: selected ? .dbAccent : .dbText2, size: 30)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(NSLocalizedString("Questo Mac", comment: ""))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.dbText)
+                        .lineLimit(1)
+                    Text(macSubtitle(snap))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Color.dbText3)
+                        .lineLimit(1)
+                }
                 Spacer()
-                if let b = badge {
-                    Text(b)
+                if let s = snap {
+                    Text(String(format: "%.0f%%", s.nominalChargePercent))
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .foregroundStyle(selected ? Color.dbAccent : Color.dbText2)
                 }
             }
         }
         .buttonStyle(.plain)
-        .dbSidebarItem(selected: selected)
-        .padding(.leading, 16)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(selected ? Color.dbAccent.opacity(0.10) : Color.clear)
+        )
+        .padding(.leading, 14)
+        .padding(.trailing, 12)
+    }
+
+    private func compareRow(selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                DBSquareIcon(symbol: "chart.line.uptrend.xyaxis", color: selected ? .dbAccent : .dbText2, size: 30)
+                Text(NSLocalizedString("Tutti i dispositivi", comment: ""))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.dbText)
+                    .lineLimit(1)
+                Spacer()
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(selected ? Color.dbAccent.opacity(0.10) : Color.clear)
+        )
+        .padding(.leading, 14)
         .padding(.trailing, 12)
     }
 
     private func iosItem(dev: IOSDevice, snap: IOSBatterySnapshot?, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: dev.connection == .usb ? "cable.connector" : "wifi")
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 18)
+                DBSquareIcon(symbol: dev.productType.contains("iPad") ? "ipad" : "iphone",
+                             color: selected ? .dbAccent : .dbText2, size: 30)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(dev.name)
-                        .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.dbText)
                         .lineLimit(1)
-                    if dev.unreachableReason != nil {
-                        Text("⚠ \(dev.connection.rawValue)")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color.dbWarn)
-                    } else {
-                        Text(dev.connection.rawValue)
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color.dbText3)
-                    }
+                    Text(iosSubtitle(dev: dev, snap: snap))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(dev.unreachableReason != nil ? Color.dbWarn : Color.dbText3)
+                        .lineLimit(1)
                 }
                 Spacer()
                 if let s = snap {
@@ -325,9 +388,33 @@ struct DBSidebar: View {
             }
         }
         .buttonStyle(.plain)
-        .dbSidebarItem(selected: selected)
-        .padding(.leading, 16)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(selected ? Color.dbAccent.opacity(0.10) : Color.clear)
+        )
+        .padding(.leading, 14)
         .padding(.trailing, 12)
+    }
+
+    private func macSubtitle(_ s: BatterySnapshot?) -> String {
+        if let s = s, s.cycleCount > 0 {
+            return "\(SystemInfo.macChip) · \(s.cycleCount) cicli"
+        }
+        return SystemInfo.macChip
+    }
+
+    private func iosSubtitle(dev: IOSDevice, snap: IOSBatterySnapshot?) -> String {
+        if let reason = dev.unreachableReason { return "⚠ \(reason.prefix(36))" }
+        let chip = SystemInfo.iosChip(productType: dev.productType)
+        let cycles = snap?.cycleCount
+        switch (chip, cycles) {
+        case (let c?, let n?): return "\(c) · \(n) cicli"
+        case (let c?, nil): return "\(c) · \(dev.connection.rawValue)"
+        case (nil, let n?): return "\(dev.productType) · \(n) cicli"
+        case (nil, nil): return "\(dev.productType) · \(dev.connection.rawValue)"
+        }
     }
 }
 
@@ -431,42 +518,70 @@ struct MacDetailView: View {
     }
 
     private func heroSection(_ s: BatterySnapshot) -> some View {
-        HStack(alignment: .center, spacing: 24) {
-            VStack(alignment: .center, spacing: 10) {
-                DBChargeGauge(percent: s.nominalChargePercent, charging: s.isCharging, size: 150)
-                Text(s.fullyCharged ? NSLocalizedString("Carica completa", comment: "") :
-                     s.isCharging ? NSLocalizedString("In carica", comment: "") :
-                     s.isPluggedIn ? NSLocalizedString("Collegato", comment: "") :
-                     NSLocalizedString("A batteria", comment: ""))
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(1.0)
-                    .foregroundStyle(Color.dbText2)
-                    .textCase(.uppercase)
+        HStack(spacing: 14) {
+            DBStatCard(label: NSLocalizedString("Salute", comment: "")) {
+                HStack(alignment: .center, spacing: 14) {
+                    DBMiniRing(percent: s.healthPercent, size: 44, color: .dbAccent)
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        Text(String(format: "%.0f", s.healthPercent))
+                            .font(.system(size: 38, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.dbText)
+                            .monospacedDigit()
+                        Text("%")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Color.dbText2)
+                    }
+                }
+                HStack(spacing: 5) {
+                    Image(systemName: "triangle.fill")
+                        .font(.system(size: 8))
+                        .foregroundStyle(Color.dbAccent)
+                    Text("FCC \(s.maxCapacity) mAh")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Color.dbAccent)
+                }
             }
-            Spacer()
-            VStack(alignment: .leading, spacing: 22) {
-                DBHeroStat(value: String(format: "%.1f", s.healthPercent),
-                           unit: "%",
-                           label: NSLocalizedString("Salute (raw FCC)", comment: ""),
-                           color: .dbAccent2)
-                DBHeroStat(value: "\(s.cycleCount)",
-                           unit: "",
-                           label: NSLocalizedString("Cicli di carica", comment: ""),
-                           color: .dbText)
+            DBStatCard(label: NSLocalizedString("Cicli", comment: "")) {
+                HStack(alignment: .lastTextBaseline, spacing: 4) {
+                    Text("\(s.cycleCount)")
+                        .font(.system(size: 38, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.dbText)
+                        .monospacedDigit()
+                }
+                Text(cyclesSubtitle(deviceId: "mac", currentCycles: s.cycleCount))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Color.dbAccent)
             }
-            Spacer()
-            VStack(alignment: .leading, spacing: 22) {
-                DBHeroStat(value: String(format: "%.1f", s.temperatureC),
-                           unit: "°C",
-                           label: NSLocalizedString("Temperatura", comment: ""),
-                           color: s.temperatureC > 40 ? .dbWarn : .dbText)
-                DBHeroStat(value: String(format: "%.2f", s.wattage),
-                           unit: "W",
-                           label: NSLocalizedString("Potenza", comment: ""),
-                           color: s.wattage > 0 ? .dbAccent : .dbText2)
+            DBStatCard(label: NSLocalizedString("Temperatura", comment: "")) {
+                HStack(alignment: .lastTextBaseline, spacing: 4) {
+                    Text(String(format: "%.1f", s.temperatureC))
+                        .font(.system(size: 38, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.dbText)
+                        .monospacedDigit()
+                    Text("°C")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.dbText2)
+                }
+                Text(s.temperatureC < 35 ? NSLocalizedString("Range ottimale", comment: "") :
+                     s.temperatureC < 40 ? "Tiepida" : "Calda")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(s.temperatureC < 35 ? Color.dbAccent :
+                                     s.temperatureC < 40 ? Color.dbWarn : Color.dbBad)
             }
         }
-        .dbCard(elevated: true)
+    }
+
+    private func cyclesSubtitle(deviceId: String, currentCycles: Int) -> String {
+        let pts = HistoryStore.shared.points(deviceId: deviceId,
+                                             since: Date().addingTimeInterval(-365 * 86400))
+        if let f = HealthAnalytics.forecast(points: pts), let left = f.cyclesUntilThreshold {
+            if let date = f.dateAtThreshold {
+                let years = date.timeIntervalSinceNow / (365.25 * 86400)
+                return String(format: "%d rimasti · ~%.1f anni", left, years)
+            }
+            return "\(left) rimasti"
+        }
+        return "in raccolta dati…"
     }
 
     private func chargeCard(_ s: BatterySnapshot) -> some View {
@@ -614,36 +729,85 @@ struct IOSDetailView: View {
     }
 
     private func iosHero(_ s: IOSBatterySnapshot) -> some View {
-        HStack(alignment: .center, spacing: 24) {
-            DBChargeGauge(percent: Double(s.chargePercent), charging: s.isCharging, size: 150)
-            Spacer()
-            VStack(alignment: .leading, spacing: 22) {
+        HStack(spacing: 14) {
+            DBStatCard(label: NSLocalizedString("Salute", comment: "")) {
                 if let h = s.healthPercent {
-                    DBHeroStat(value: String(format: "%.1f", h), unit: "%",
-                               label: NSLocalizedString("Salute (raw FCC)", comment: ""),
-                               color: .dbAccent2)
-                }
-                if let c = s.cycleCount {
-                    DBHeroStat(value: "\(c)", unit: "",
-                               label: NSLocalizedString("Cicli di carica", comment: ""),
-                               color: .dbText)
+                    HStack(alignment: .center, spacing: 14) {
+                        DBMiniRing(percent: h, size: 44, color: .dbAccent)
+                        HStack(alignment: .lastTextBaseline, spacing: 4) {
+                            Text(String(format: "%.0f", h))
+                                .font(.system(size: 38, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.dbText)
+                                .monospacedDigit()
+                            Text("%")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(Color.dbText2)
+                        }
+                    }
+                    if let m = s.nominalCapacity {
+                        HStack(spacing: 5) {
+                            Image(systemName: "triangle.fill").font(.system(size: 8)).foregroundStyle(Color.dbAccent)
+                            Text("FCC \(m) mAh").font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.dbAccent)
+                        }
+                    }
+                } else {
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        Text("—").font(.system(size: 38, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.dbText3)
+                    }
+                    Text("non disponibile")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Color.dbText3)
                 }
             }
-            Spacer()
-            VStack(alignment: .leading, spacing: 22) {
+            DBStatCard(label: NSLocalizedString("Cicli", comment: "")) {
+                Text(s.cycleCount.map { "\($0)" } ?? "—")
+                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.dbText)
+                    .monospacedDigit()
+                Text(cyclesSubtitleIOS(udid: device.udid, currentCycles: s.cycleCount))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Color.dbAccent)
+            }
+            DBStatCard(label: NSLocalizedString("Temperatura", comment: "")) {
                 if let t = s.temperatureC {
-                    DBHeroStat(value: String(format: "%.1f", t), unit: "°C",
-                               label: NSLocalizedString("Temperatura", comment: ""),
-                               color: t > 40 ? .dbWarn : .dbText)
-                }
-                if let v = s.voltageV {
-                    DBHeroStat(value: String(format: "%.2f", v), unit: "V",
-                               label: NSLocalizedString("Voltaggio", comment: ""),
-                               color: .dbAccent2)
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        Text(String(format: "%.1f", t))
+                            .font(.system(size: 38, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.dbText)
+                            .monospacedDigit()
+                        Text("°C").font(.system(size: 14, weight: .medium)).foregroundStyle(Color.dbText2)
+                    }
+                    Text(t < 35 ? NSLocalizedString("Range ottimale", comment: "") :
+                         t < 40 ? "Tiepida" : "Calda")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(t < 35 ? Color.dbAccent : t < 40 ? Color.dbWarn : Color.dbBad)
+                } else {
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        Text("\(s.chargePercent)")
+                            .font(.system(size: 38, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.dbText)
+                            .monospacedDigit()
+                        Text("%").font(.system(size: 14, weight: .medium)).foregroundStyle(Color.dbText2)
+                    }
+                    Text(s.isCharging ? NSLocalizedString("In carica", comment: "") : NSLocalizedString("Carica", comment: ""))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Color.dbAccent)
                 }
             }
         }
-        .dbCard(elevated: true)
+    }
+
+    private func cyclesSubtitleIOS(udid: String, currentCycles: Int?) -> String {
+        let pts = HistoryStore.shared.points(deviceId: udid, since: Date().addingTimeInterval(-365 * 86400))
+        if let f = HealthAnalytics.forecast(points: pts), let left = f.cyclesUntilThreshold {
+            if let date = f.dateAtThreshold {
+                let years = date.timeIntervalSinceNow / (365.25 * 86400)
+                return String(format: "%d rimasti · ~%.1f anni", left, years)
+            }
+            return "\(left) rimasti"
+        }
+        return currentCycles == nil ? "non disponibile" : "in raccolta dati…"
     }
 
     private func chargeCard(_ s: IOSBatterySnapshot) -> some View {
@@ -787,7 +951,7 @@ struct CompareView: View {
                 chargeChartCard
                 ForEach(data, id: \.deviceId) { series in
                     if let f = HealthAnalytics.forecast(points: series.points) {
-                        ForecastCard(label: series.label, forecast: f)
+                        ForecastCard(label: series.label, forecast: f, points: series.points)
                     }
                 }
             }
@@ -884,26 +1048,89 @@ struct CompareView: View {
 struct ForecastCard: View {
     let label: String
     let forecast: HealthForecast
+    let points: [HistoryPoint]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            DBSectionHeader(title: "\(NSLocalizedString("Previsione salute", comment: "")) — \(label)", icon: "chart.line.uptrend.xyaxis")
-            DBKVRow(label: NSLocalizedString("Salute (raw FCC)", comment: ""), value: String(format: "%.1f %%", forecast.currentHealth), valueColor: .dbAccent)
-            DBKVRow(label: NSLocalizedString("Trend salute", comment: ""), value: String(format: "%.3f %%/d", forecast.slopePerDay), valueColor: forecast.slopePerDay < 0 ? .dbAccent2 : .dbText)
-            if let d = forecast.dateAtThreshold {
-                DBKVRow(label: NSLocalizedString("Salute prevista a 80 %", comment: ""), value: formatDate(d))
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("\(NSLocalizedString("Previsione salute", comment: "")) — \(label)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.dbText)
+                Spacer()
+                Text("12 mesi · regressione lineare")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Color.dbText3)
             }
-            if let c = forecast.cyclesUntilThreshold {
-                DBKVRow(label: NSLocalizedString("Cicli stimati restanti", comment: ""), value: "\(c)", valueColor: .dbAccent)
+            forecastChart
+            HStack(spacing: 24) {
+                forecastStat(label: NSLocalizedString("Salute (raw FCC)", comment: ""),
+                             value: String(format: "%.1f %%", forecast.currentHealth),
+                             color: .dbAccent)
+                forecastStat(label: NSLocalizedString("Trend salute", comment: ""),
+                             value: String(format: "%.3f %%/d", forecast.slopePerDay),
+                             color: forecast.slopePerDay < 0 ? .dbAccent2 : .dbText)
+                if let d = forecast.dateAtThreshold {
+                    forecastStat(label: NSLocalizedString("Salute prevista a 80 %", comment: ""),
+                                 value: formatDate(d), color: .dbText)
+                }
+                if let c = forecast.cyclesUntilThreshold {
+                    forecastStat(label: NSLocalizedString("Cicli stimati restanti", comment: ""),
+                                 value: "\(c)", color: .dbAccent)
+                }
             }
-            ProgressView(value: forecast.confidence)
-                .tint(Color.dbAccent)
-                .padding(.top, 4)
-            Text("R² \(String(format: "%.2f", forecast.confidence))")
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(Color.dbText3)
+            HStack(spacing: 6) {
+                Text("R² \(String(format: "%.2f", forecast.confidence))")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(Color.dbText3)
+                ProgressView(value: forecast.confidence)
+                    .tint(Color.dbAccent)
+            }
         }
         .dbCard()
+    }
+
+    private func forecastStat(label: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(1.0)
+                .foregroundStyle(Color.dbText3)
+                .textCase(.uppercase)
+            Text(value)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundStyle(color)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var forecastChart: some View {
+        let series = points.compactMap { p -> (Date, Double)? in
+            guard let h = p.healthPercent else { return nil }
+            return (p.timestamp, h)
+        }
+        if series.count >= 2 {
+            Chart {
+                ForEach(series, id: \.0) { p in
+                    AreaMark(x: .value("t", p.0), y: .value("Salute", p.1))
+                        .foregroundStyle(LinearGradient(
+                            colors: [Color.dbAccent.opacity(0.45), Color.dbAccent.opacity(0.0)],
+                            startPoint: .top, endPoint: .bottom))
+                        .interpolationMethod(.linear)
+                    LineMark(x: .value("t", p.0), y: .value("Salute", p.1))
+                        .foregroundStyle(Color.dbAccent)
+                        .interpolationMethod(.linear)
+                        .lineStyle(StrokeStyle(lineWidth: 1.6))
+                }
+            }
+            .chartYScale(domain: max(60, forecast.currentHealth - 10)...100)
+            .frame(height: 180)
+        } else {
+            Text(NSLocalizedString("Dati insufficienti per la previsione", comment: ""))
+                .font(.system(size: 11))
+                .foregroundStyle(Color.dbText3)
+                .frame(maxWidth: .infinity, minHeight: 100)
+        }
     }
 }
 
