@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battery Monitor — Free battery diagnostics for Mac, iPhone & iPad</title>
+    <meta name="description" content="Open-source battery health, cycle count and power adapter monitor for macOS, iOS and iPadOS. No telemetry, all data stays on your Mac.">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="hero">
+        <nav>
+            <span class="brand">⚡ Battery Monitor</span>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#download">Download</a>
+                <a href="https://github.com/Gianmarco0001/Doctor-Battery" target="_blank" rel="noopener">GitHub</a>
+            </div>
+        </nav>
+        <div class="hero-content">
+            <h1>Free battery diagnostics<br>for Mac, iPhone & iPad</h1>
+            <p class="tagline">Open-source. No telemetry. All data stays on your Mac.</p>
+            <div class="cta">
+                <a class="btn primary" href="#download">Download for macOS</a>
+                <a class="btn secondary" href="https://github.com/Gianmarco0001/Doctor-Battery" target="_blank" rel="noopener">View on GitHub</a>
+            </div>
+            <p class="meta">Universal binary · Apple Silicon + Intel · macOS 13+</p>
+        </div>
+    </header>
+
+    <section id="features" class="features">
+        <h2>Everything you need to know about your batteries</h2>
+        <div class="grid">
+            <div class="card">
+                <h3>📊 Real raw FCC health</h3>
+                <p>Reads the gas-gauge IC directly. Same numbers Apple's own diagnostics use, exposed transparently.</p>
+            </div>
+            <div class="card">
+                <h3>🔄 Cycle counting & forecast</h3>
+                <p>Linear-regression forecast tells you when health will hit 80% and how many cycles you have left.</p>
+            </div>
+            <div class="card">
+                <h3>📱 iPhone & iPad support</h3>
+                <p>Full battery details over USB or Wi-Fi via libimobiledevice. Cycle count, capacity, temperature, voltage.</p>
+            </div>
+            <div class="card">
+                <h3>⚡ Power adapter classifier</h3>
+                <p>Identifies Apple original vs MFi-certified vs generic chargers from the FamilyCode IORegistry value.</p>
+            </div>
+            <div class="card">
+                <h3>📈 History & charts</h3>
+                <p>SQLite-backed history with overlapping charts across all your devices. Export to CSV.</p>
+            </div>
+            <div class="card">
+                <h3>🔔 Smart notifications</h3>
+                <p>Anomaly detection: alerts you if health drops faster than normal. Plus low battery, hot battery, calibration reminders.</p>
+            </div>
+            <div class="card">
+                <h3>🌐 Localized</h3>
+                <p>Italian and English out of the box. More languages welcome via PR.</p>
+            </div>
+            <div class="card">
+                <h3>🔒 Privacy first</h3>
+                <p>No analytics, no network calls, no account. Your data is in <code>~/Library/Application Support/BatteryMonitor</code>.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="download" class="download">
+        <h2>Download</h2>
+        <p>Pre-built universal binary on GitHub Releases.</p>
+        <a class="btn primary" href="https://github.com/Gianmarco0001/Doctor-Battery/releases/latest" target="_blank" rel="noopener">Latest release</a>
+        <div class="install-note">
+            <h3>First launch</h3>
+            <p>The app is signed ad-hoc, so Gatekeeper warns on first launch. Right-click the <code>.app</code> → <strong>Open</strong> → confirm. macOS remembers the choice.</p>
+            <h3>iOS / iPad support</h3>
+            <p>Install <a href="https://libimobiledevice.org" target="_blank" rel="noopener">libimobiledevice</a>:</p>
+            <pre><code>brew install libimobiledevice usbmuxd</code></pre>
+            <p>Connect the device, unlock it, accept "Trust this Mac". Wi-Fi works after a one-time USB pairing.</p>
+        </div>
+    </section>
+
+    <section class="build">
+        <h2>Build from source</h2>
+<pre><code>git clone https://github.com/Gianmarco0001/Doctor-Battery.git
+cd Doctor-Battery
+./build.sh
+open build/BatteryMonitor.app</code></pre>
+        <p>Pure Swift + SwiftUI + Swift Charts. No third-party dependencies. ~1300 LOC.</p>
+    </section>
+
+    <footer>
+        <p>MIT License · <a href="https://github.com/Gianmarco0001/Doctor-Battery" target="_blank" rel="noopener">Source on GitHub</a></p>
+        <p class="small">Built on libimobiledevice (LGPL). Not affiliated with Apple Inc.</p>
+    </footer>
+</body>
+</html>
