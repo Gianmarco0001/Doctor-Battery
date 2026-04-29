@@ -5,93 +5,136 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Doctor Battery — Free battery diagnostics for Mac, iPhone & iPad</title>
     <meta name="description" content="Open-source battery health, cycle count and power adapter monitor for macOS, iOS and iPadOS. No telemetry, all data stays on your Mac.">
+    <link rel="icon" type="image/png" href="icon.png">
     <link rel="stylesheet" href="style.css">
+    <script src="i18n.js" defer></script>
 </head>
 <body>
     <header class="hero">
         <nav>
-            <span class="brand">🩺 Doctor Battery</span>
+            <span class="brand">
+                <img src="icon.png" alt="" class="logo">
+                <span>Doctor Battery</span>
+            </span>
             <div class="nav-links">
-                <a href="#features">Features</a>
-                <a href="#download">Download</a>
-                <a href="https://github.com/Gianmarco0001/Doctor-Battery" target="_blank" rel="noopener">GitHub</a>
+                <a href="#features" data-i18n="nav.features">Features</a>
+                <a href="#preview" data-i18n="nav.preview">Preview</a>
+                <a href="#download" data-i18n="nav.download">Download</a>
+                <a href="https://github.com/Gianmarco0001/Doctor-Battery" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+                <select id="lang-switch" class="lang-switch" aria-label="Language">
+                    <option value="en">EN</option>
+                    <option value="it">IT</option>
+                    <option value="fr">FR</option>
+                    <option value="de">DE</option>
+                    <option value="es">ES</option>
+                </select>
             </div>
         </nav>
         <div class="hero-content">
-            <h1>Free battery diagnostics<br>for Mac, iPhone & iPad</h1>
-            <p class="tagline">Open-source. No telemetry. All data stays on your Mac.</p>
+            <img src="icon.png" alt="Doctor Battery icon" class="hero-icon">
+            <h1 data-i18n="hero.title">Free battery diagnostics<br>for Mac, iPhone &amp; iPad</h1>
+            <p class="tagline" data-i18n="hero.tagline">Open-source. No telemetry. All data stays on your Mac.</p>
             <div class="cta">
-                <a class="btn primary" href="#download">Download for macOS</a>
-                <a class="btn secondary" href="https://github.com/Gianmarco0001/Doctor-Battery" target="_blank" rel="noopener">View on GitHub</a>
+                <a class="btn primary" href="#download" data-i18n="hero.cta.download">Download for macOS</a>
+                <a class="btn secondary" href="https://github.com/Gianmarco0001/Doctor-Battery" target="_blank" rel="noopener" data-i18n="hero.cta.github">View on GitHub</a>
             </div>
-            <p class="meta">Universal binary · Apple Silicon + Intel · macOS 13+</p>
+            <p class="meta" data-i18n="hero.meta">Universal binary · Apple Silicon + Intel · macOS 13+</p>
         </div>
     </header>
 
+    <section id="preview" class="preview">
+        <h2 data-i18n="preview.title">What it looks like</h2>
+        <div class="screenshots">
+            <figure>
+                <img src="screenshot-mac.png" alt="Mac battery view" loading="lazy">
+                <figcaption data-i18n="preview.cap.mac">Mac · cycle count, raw FCC health, live wattage, adapter quality, history chart</figcaption>
+            </figure>
+            <figure>
+                <img src="screenshot-ios.png" alt="iPad / iPhone detail" loading="lazy">
+                <figcaption data-i18n="preview.cap.ios">iPhone &amp; iPad · USB or Wi-Fi via libimobiledevice</figcaption>
+            </figure>
+            <figure>
+                <img src="screenshot-settings.png" alt="Settings panel" loading="lazy">
+                <figcaption data-i18n="preview.cap.settings">Settings · launch at login, log interval, language, all thresholds</figcaption>
+            </figure>
+        </div>
+    </section>
+
     <section id="features" class="features">
-        <h2>Everything you need to know about your batteries</h2>
+        <h2 data-i18n="features.title">Everything you need to know about your batteries</h2>
         <div class="grid">
             <div class="card">
-                <h3>📊 Real raw FCC health</h3>
-                <p>Reads the gas-gauge IC directly. Same numbers Apple's own diagnostics use, exposed transparently.</p>
+                <div class="card-icon">📊</div>
+                <h3 data-i18n="f1.t">Real raw FCC health</h3>
+                <p data-i18n="f1.d">Reads the gas-gauge IC directly. Same numbers Apple's own diagnostics use, exposed transparently.</p>
             </div>
             <div class="card">
-                <h3>🔄 Cycle counting & forecast</h3>
-                <p>Linear-regression forecast tells you when health will hit 80% and how many cycles you have left.</p>
+                <div class="card-icon">🔄</div>
+                <h3 data-i18n="f2.t">Cycle counting &amp; forecast</h3>
+                <p data-i18n="f2.d">Linear-regression forecast tells you when health will hit 80% and how many cycles you have left.</p>
             </div>
             <div class="card">
-                <h3>📱 iPhone & iPad support</h3>
-                <p>Full battery details over USB or Wi-Fi via libimobiledevice. Cycle count, capacity, temperature, voltage.</p>
+                <div class="card-icon">📱</div>
+                <h3 data-i18n="f3.t">iPhone &amp; iPad support</h3>
+                <p data-i18n="f3.d">Full battery details over USB or Wi-Fi via libimobiledevice. Cycle count, capacity, temperature, voltage.</p>
             </div>
             <div class="card">
-                <h3>⚡ Power adapter classifier</h3>
-                <p>Identifies Apple original vs MFi-certified vs generic chargers from the FamilyCode IORegistry value.</p>
+                <div class="card-icon">⚡</div>
+                <h3 data-i18n="f4.t">Power adapter classifier</h3>
+                <p data-i18n="f4.d">Identifies Apple original vs MFi-certified vs generic chargers from the FamilyCode IORegistry value.</p>
             </div>
             <div class="card">
-                <h3>📈 History & charts</h3>
-                <p>SQLite-backed history with overlapping charts across all your devices. Export to CSV.</p>
+                <div class="card-icon">📈</div>
+                <h3 data-i18n="f5.t">History &amp; charts</h3>
+                <p data-i18n="f5.d">SQLite-backed history with overlapping charts across all your devices. Export to CSV.</p>
             </div>
             <div class="card">
-                <h3>🔔 Smart notifications</h3>
-                <p>Anomaly detection: alerts you if health drops faster than normal. Plus low battery, hot battery, calibration reminders.</p>
+                <div class="card-icon">🔔</div>
+                <h3 data-i18n="f6.t">Smart notifications</h3>
+                <p data-i18n="f6.d">Anomaly detection: alerts you if health drops faster than normal. Plus low battery, hot battery, calibration reminders.</p>
             </div>
             <div class="card">
-                <h3>🌐 Localized</h3>
-                <p>Italian and English out of the box. More languages welcome via PR.</p>
+                <div class="card-icon">🌐</div>
+                <h3 data-i18n="f7.t">Localized</h3>
+                <p data-i18n="f7.d">Italian, English, French, German, Spanish out of the box. More languages welcome via PR.</p>
             </div>
             <div class="card">
-                <h3>🔒 Privacy first</h3>
-                <p>No analytics, no network calls, no account. Your data is in <code>~/Library/Application Support/BatteryMonitor</code>.</p>
+                <div class="card-icon">🔒</div>
+                <h3 data-i18n="f8.t">Privacy first</h3>
+                <p data-i18n="f8.d">No analytics, no network calls, no account.</p>
             </div>
         </div>
     </section>
 
     <section id="download" class="download">
-        <h2>Download</h2>
-        <p>Pre-built universal binary on GitHub Releases.</p>
-        <a class="btn primary" href="https://github.com/Gianmarco0001/Doctor-Battery/releases/latest" target="_blank" rel="noopener">Latest release</a>
+        <h2 data-i18n="download.title">Download</h2>
+        <p data-i18n="download.sub">Pre-built universal binary on GitHub Releases.</p>
+        <a class="btn primary" href="https://github.com/Gianmarco0001/Doctor-Battery/releases/latest" target="_blank" rel="noopener" data-i18n="download.cta">Latest release</a>
         <div class="install-note">
-            <h3>First launch</h3>
-            <p>The app is signed ad-hoc, so Gatekeeper warns on first launch. Right-click the <code>.app</code> → <strong>Open</strong> → confirm. macOS remembers the choice.</p>
-            <h3>iOS / iPad support</h3>
-            <p>Install <a href="https://libimobiledevice.org" target="_blank" rel="noopener">libimobiledevice</a>:</p>
+            <h3 data-i18n="install.first">First launch</h3>
+            <p data-i18n="install.first.body">The app is signed ad-hoc, so Gatekeeper warns on first launch. Right-click the <code>.app</code> → <strong>Open</strong> → confirm. macOS remembers the choice.</p>
+            <h3 data-i18n="install.ios">iOS / iPad support</h3>
+            <p data-i18n="install.ios.body">Install <a href="https://libimobiledevice.org" target="_blank" rel="noopener">libimobiledevice</a>:</p>
             <pre><code>brew install libimobiledevice usbmuxd</code></pre>
-            <p>Connect the device, unlock it, accept "Trust this Mac". Wi-Fi works after a one-time USB pairing.</p>
+            <p data-i18n="install.ios.body2">Connect the device, unlock it, accept "Trust this Mac". Wi-Fi works after a one-time USB pairing.</p>
         </div>
     </section>
 
     <section class="build">
-        <h2>Build from source</h2>
+        <h2 data-i18n="build.title">Build from source</h2>
 <pre><code>git clone https://github.com/Gianmarco0001/Doctor-Battery.git
 cd Doctor-Battery
 ./build.sh
 open build/DoctorBattery.app</code></pre>
-        <p>Pure Swift + SwiftUI + Swift Charts. No third-party dependencies. ~1300 LOC.</p>
+        <p data-i18n="build.note">Pure Swift + SwiftUI + Swift Charts. No third-party dependencies. ~1300 LOC.</p>
     </section>
 
     <footer>
-        <p>MIT License · <a href="https://github.com/Gianmarco0001/Doctor-Battery" target="_blank" rel="noopener">Source on GitHub</a></p>
-        <p class="small">Built on libimobiledevice (LGPL). Not affiliated with Apple Inc.</p>
+        <p>
+            <span data-i18n="footer.lic">MIT License · </span>
+            <a href="https://github.com/Gianmarco0001/Doctor-Battery" target="_blank" rel="noopener" data-i18n="footer.src">Source on GitHub</a>
+        </p>
+        <p class="small" data-i18n="footer.small">Built on libimobiledevice (LGPL). Not affiliated with Apple Inc.</p>
     </footer>
 </body>
 </html>

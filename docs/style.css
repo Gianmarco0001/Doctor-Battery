@@ -56,7 +56,62 @@ nav {
     margin: 0 auto 100px;
 }
 
-.brand { font-size: 1.2rem; font-weight: 700; }
+.brand {
+    font-size: 1.2rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+.logo { width: 32px; height: 32px; border-radius: 7px; }
+
+.hero-icon {
+    width: 140px;
+    height: 140px;
+    border-radius: 30px;
+    margin-bottom: 28px;
+    box-shadow: 0 20px 60px rgba(48, 209, 88, 0.25);
+}
+
+.lang-switch {
+    margin-left: 28px;
+    background: transparent;
+    color: var(--fg-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    cursor: pointer;
+}
+.lang-switch:hover { color: var(--fg); border-color: var(--accent); }
+
+.preview { padding-top: 60px; }
+.screenshots {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 24px;
+}
+.screenshots figure {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color .15s ease, transform .15s ease;
+}
+.screenshots figure:hover { border-color: var(--accent); transform: translateY(-3px); }
+.screenshots img {
+    width: 100%;
+    display: block;
+    border-bottom: 1px solid var(--border);
+}
+.screenshots figcaption {
+    padding: 14px 18px;
+    font-size: 0.9rem;
+    color: var(--fg-2);
+}
+
+.card-icon { font-size: 1.6rem; margin-bottom: 8px; }
 
 .nav-links a {
     margin-left: 28px;
