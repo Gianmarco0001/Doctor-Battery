@@ -95,24 +95,29 @@ struct DBKVRow: View {
 
 struct DBAurora: View {
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color.dbAccent.opacity(0.18))
-                .frame(width: 700, height: 700)
-                .blur(radius: 120)
-                .offset(x: -250, y: -300)
-            Circle()
-                .fill(Color.dbAccent2.opacity(0.10))
-                .frame(width: 600, height: 600)
-                .blur(radius: 110)
-                .offset(x: 280, y: 250)
-            Circle()
-                .fill(Color.dbAccent.opacity(0.08))
-                .frame(width: 500, height: 500)
-                .blur(radius: 90)
-                .offset(x: 100, y: -120)
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            ZStack {
+                Circle()
+                    .fill(Color.dbAccent.opacity(0.22))
+                    .frame(width: max(w, h) * 1.0, height: max(w, h) * 1.0)
+                    .blur(radius: 140)
+                    .position(x: w * 0.20, y: h * 0.15)
+                Circle()
+                    .fill(Color.dbAccent2.opacity(0.14))
+                    .frame(width: max(w, h) * 0.85, height: max(w, h) * 0.85)
+                    .blur(radius: 130)
+                    .position(x: w * 0.85, y: h * 0.30)
+                Circle()
+                    .fill(Color.dbAccent.opacity(0.12))
+                    .frame(width: max(w, h) * 0.75, height: max(w, h) * 0.75)
+                    .blur(radius: 110)
+                    .position(x: w * 0.55, y: h * 0.85)
+            }
+            .frame(width: w, height: h)
+            .drawingGroup(opaque: false)
         }
-        .drawingGroup(opaque: false)
         .allowsHitTesting(false)
     }
 }

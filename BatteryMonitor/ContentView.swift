@@ -17,6 +17,9 @@ final class AppViewModel: ObservableObject {
 
     @Published var macWattageHistory: [(Date, Double)] = []
     @Published var lastFullDischarge: Date?
+    @Published var systemTemps: SystemTemperatureSummary = SystemTemperatureSummary(all: [], cpuAvg: nil, cpuMax: nil, gpuAvg: nil, gpuMax: nil, socMax: nil, nandMax: nil)
+    private var tempSamples: [SystemTemperatureSummary] = []
+    private let tempWindowSize = 5
 
     private var fastTimer: Timer?
     private var slowTimer: Timer?
@@ -93,7 +96,11 @@ final class AppViewModel: ObservableObject {
 
     func refreshAll() {
         let mac = BatteryReader.read()
+        let raw = SystemTemperatures.read()
+        tempSamples.append(raw)
+        if tempSamples.count > tempWindowSize { tempSamples.removeFirst() }
         self.macSnapshot = mac
+        self.systemTemps = smoothedTemps()
         if let m = mac {
             Notifier.shared.evaluateMac(m)
             self.appendWattage(m)
@@ -119,6 +126,21 @@ final class AppViewModel: ObservableObject {
                 self.iosRefreshInFlight = false
             }
         }
+    }
+
+    private func smoothedTemps() -> SystemTemperatureSummary {
+        func avg(_ vs: [Double]) -> Double? {
+            vs.isEmpty ? nil : vs.reduce(0, +) / Double(vs.count)
+        }
+        return SystemTemperatureSummary(
+            all: tempSamples.last?.all ?? [],
+            cpuAvg: avg(tempSamples.compactMap(\.cpuAvg)),
+            cpuMax: avg(tempSamples.compactMap(\.cpuMax)),
+            gpuAvg: avg(tempSamples.compactMap(\.gpuAvg)),
+            gpuMax: avg(tempSamples.compactMap(\.gpuMax)),
+            socMax: avg(tempSamples.compactMap(\.socMax)),
+            nandMax: avg(tempSamples.compactMap(\.nandMax))
+        )
     }
 
     private func appendWattage(_ s: BatterySnapshot) {
@@ -502,6 +524,7 @@ struct MacDetailView: View {
                              onRefresh: { vm.refreshAll() })
                     heroSection(s)
                     forecastSection(deviceId: "mac", label: "Mac")
+                    temperaturesCard(s)
                     chargeCard(s)
                     healthCard(s)
                     powerCard(s)
@@ -553,9 +576,11 @@ struct MacDetailView: View {
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(Color.dbAccent)
             }
+            let displayTemp = vm.systemTemps.cpuAvg ?? vm.systemTemps.socMax ?? s.temperatureC
+            let label = vm.systemTemps.cpuAvg != nil ? "CPU" : (vm.systemTemps.socMax != nil ? "SoC" : NSLocalizedString("Batteria", comment: ""))
             DBStatCard(label: NSLocalizedString("Temperatura", comment: "")) {
                 HStack(alignment: .lastTextBaseline, spacing: 4) {
-                    Text(String(format: "%.1f", s.temperatureC))
+                    Text(String(format: "%.1f", displayTemp))
                         .font(.system(size: 38, weight: .bold, design: .rounded))
                         .foregroundStyle(Color.dbText)
                         .monospacedDigit()
@@ -563,12 +588,47 @@ struct MacDetailView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(Color.dbText2)
                 }
-                Text(s.temperatureC < 35 ? NSLocalizedString("Range ottimale", comment: "") :
-                     s.temperatureC < 40 ? "Tiepida" : "Calda")
+                Text("\(label) · \(displayTemp < 50 ? NSLocalizedString("Range ottimale", comment: "") : displayTemp < 70 ? "Tiepida" : "Calda")")
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(s.temperatureC < 35 ? Color.dbAccent :
-                                     s.temperatureC < 40 ? Color.dbWarn : Color.dbBad)
+                    .foregroundStyle(displayTemp < 50 ? Color.dbAccent :
+                                     displayTemp < 70 ? Color.dbWarn : Color.dbBad)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func temperaturesCard(_ s: BatterySnapshot) -> some View {
+        let t = vm.systemTemps
+        if t.cpuMax != nil || t.gpuMax != nil || t.socMax != nil || t.nandMax != nil || !t.all.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                DBSectionHeader(title: NSLocalizedString("Temperature sistema", comment: ""), icon: "thermometer.medium")
+                if let avg = t.cpuAvg, let mx = t.cpuMax {
+                    DBKVRow(label: "CPU",
+                            value: String(format: "avg %.1f · max %.1f °C", avg, mx),
+                            valueColor: mx < 60 ? .dbAccent : mx < 80 ? .dbWarn : .dbBad)
+                }
+                if let avg = t.gpuAvg, let mx = t.gpuMax {
+                    DBKVRow(label: "GPU",
+                            value: String(format: "avg %.1f · max %.1f °C", avg, mx),
+                            valueColor: mx < 60 ? .dbAccent : mx < 80 ? .dbWarn : .dbBad)
+                }
+                if let soc = t.socMax {
+                    DBKVRow(label: "SoC die", value: String(format: "%.1f °C", soc),
+                            valueColor: soc < 60 ? .dbAccent : soc < 80 ? .dbWarn : .dbBad)
+                }
+                if let nand = t.nandMax {
+                    DBKVRow(label: "NAND / SSD", value: String(format: "%.1f °C", nand),
+                            valueColor: nand < 50 ? .dbAccent : nand < 70 ? .dbWarn : .dbBad)
+                }
+                DBKVRow(label: NSLocalizedString("Batteria", comment: ""),
+                        value: String(format: "%.1f °C", s.temperatureC),
+                        valueColor: s.temperatureC < 35 ? .dbAccent : s.temperatureC < 40 ? .dbWarn : .dbBad)
+                Text(NSLocalizedString("Letture dirette dai sensori termici via IOHIDEventSystem.", comment: ""))
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.dbText3)
+                    .padding(.top, 4)
+            }
+            .dbCard()
         }
     }
 
