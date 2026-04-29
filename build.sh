@@ -22,6 +22,7 @@ SOURCES=(
     BatteryMonitor/SettingsView.swift
     BatteryMonitor/HealthAnalytics.swift
     BatteryMonitor/AdapterDatabase.swift
+    BatteryMonitor/Theme.swift
 )
 
 FRAMEWORKS="-framework SwiftUI -framework IOKit -framework UserNotifications -framework Charts -framework AppKit -framework ServiceManagement -lsqlite3"

@@ -66,6 +66,10 @@ final class Notifier {
     private func fire(key: String, title: String, body: String, noCooldown: Bool = false) {
         if !noCooldown, let last = lastFiredKey[key], Date().timeIntervalSince(last) < cooldown { return }
         lastFiredKey[key] = Date()
+        if lastFiredKey.count > 200 {
+            let cutoff = Date().addingTimeInterval(-7 * 24 * 3600)
+            lastFiredKey = lastFiredKey.filter { $0.value > cutoff }
+        }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

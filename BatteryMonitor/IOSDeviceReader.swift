@@ -262,12 +262,36 @@ enum IOSDeviceReader {
         let outPipe = Pipe(); let errPipe = Pipe()
         p.standardOutput = outPipe
         p.standardError = errPipe
-        do { try p.run() } catch { return ("", "spawn error: \(error)") }
+
+        var outData = Data()
+        var errData = Data()
+        let outQueue = DispatchQueue(label: "proc.out")
+        let errQueue = DispatchQueue(label: "proc.err")
+        outPipe.fileHandleForReading.readabilityHandler = { h in
+            let d = h.availableData
+            if !d.isEmpty { outQueue.sync { outData.append(d) } }
+        }
+        errPipe.fileHandleForReading.readabilityHandler = { h in
+            let d = h.availableData
+            if !d.isEmpty { errQueue.sync { errData.append(d) } }
+        }
+
+        do { try p.run() } catch {
+            outPipe.fileHandleForReading.readabilityHandler = nil
+            errPipe.fileHandleForReading.readabilityHandler = nil
+            return ("", "spawn error: \(error)")
+        }
+
         let deadline = Date().addingTimeInterval(timeout)
         while p.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
         if p.isRunning { p.terminate() }
-        let out = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let err = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        p.waitUntilExit()
+
+        outPipe.fileHandleForReading.readabilityHandler = nil
+        errPipe.fileHandleForReading.readabilityHandler = nil
+
+        let out = outQueue.sync { String(data: outData, encoding: .utf8) ?? "" }
+        let err = errQueue.sync { String(data: errData, encoding: .utf8) ?? "" }
         return (out, err)
     }
 

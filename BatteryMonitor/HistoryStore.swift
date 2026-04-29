@@ -22,6 +22,10 @@ final class HistoryStore {
     private var db: OpaquePointer?
     private let queue = DispatchQueue(label: "history.store")
 
+    deinit {
+        if let db = db { sqlite3_close(db) }
+    }
+
     private init() {
         guard let dir = supportDir() else { return }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

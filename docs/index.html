@@ -1,140 +1,1529 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Doctor Battery — Free battery diagnostics for Mac, iPhone & iPad</title>
-    <meta name="description" content="Open-source battery health, cycle count and power adapter monitor for macOS, iOS and iPadOS. No telemetry, all data stays on your Mac.">
-    <link rel="icon" type="image/png" href="icon.png">
-    <link rel="stylesheet" href="style.css">
-    <script src="i18n.js" defer></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Doctor Battery — Diagnostica batteria gratuita per Mac, iPhone & iPad</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+
+<style>
+  :root {
+    --bg: #000000;
+    --bg-2: #0a0a0a;
+    --surface: #131316;
+    --surface-2: #1a1a1e;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.14);
+    --text: #f5f5f7;
+    --text-2: #a1a1a6;
+    --text-3: #6e6e73;
+    --accent: #30d158;
+    --accent-2: #00d4ff;
+    --accent-warn: #ff9f0a;
+    --accent-bad: #ff453a;
+    --glow: rgba(48, 209, 88, 0.45);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: auto; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    line-height: 1.5;
+    cursor: none;
+  }
+  @media (max-width: 900px) { body { cursor: auto; } }
+
+  .cursor-dot, .cursor-ring {
+    position: fixed; top: 0; left: 0;
+    pointer-events: none; z-index: 9999;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    will-change: transform;
+  }
+  .cursor-dot {
+    width: 6px; height: 6px;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--glow);
+    transition: transform 0.15s ease, opacity 0.2s;
+  }
+  .cursor-ring {
+    width: 36px; height: 36px;
+    border: 1px solid rgba(255,255,255,0.4);
+    transition: width 0.3s ease, height 0.3s ease, border-color 0.3s ease, transform 0.1s linear;
+  }
+  .cursor-ring.hover {
+    width: 60px; height: 60px;
+    border-color: var(--accent);
+    background: rgba(48, 209, 88, 0.06);
+  }
+
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.85' numOctaves='2' /></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.5'/></svg>");
+    opacity: 0.04; mix-blend-mode: overlay; z-index: 1;
+  }
+
+  .aurora { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .aurora::before, .aurora::after {
+    content: ""; position: absolute;
+    width: 70vw; height: 70vw;
+    border-radius: 50%; filter: blur(120px);
+    opacity: 0.35; will-change: transform;
+  }
+  .aurora::before {
+    background: radial-gradient(circle, var(--accent) 0%, transparent 60%);
+    top: -20vw; left: -10vw;
+    animation: float1 22s ease-in-out infinite;
+  }
+  .aurora::after {
+    background: radial-gradient(circle, var(--accent-2) 0%, transparent 60%);
+    bottom: -25vw; right: -15vw; opacity: 0.18;
+    animation: float2 28s ease-in-out infinite;
+  }
+  @keyframes float1 { 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(8vw,6vw) scale(1.15);} }
+  @keyframes float2 { 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(-6vw,-8vw) scale(1.2);} }
+
+  /* Nav */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    padding: 18px 40px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: transparent;
+    transition: backdrop-filter 0.4s, background 0.4s, border-color 0.4s;
+    border-bottom: 1px solid transparent;
+  }
+  .nav.scrolled {
+    backdrop-filter: saturate(180%) blur(20px);
+    background: rgba(0,0,0,0.6);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-brand {
+    display: flex; align-items: center; gap: 12px;
+    font-weight: 600; font-size: 15px; letter-spacing: -0.01em;
+  }
+  .nav-links {
+    display: flex; gap: 28px; align-items: center;
+    font-size: 13px; color: var(--text-2);
+  }
+  .nav-link {
+    text-decoration: none; color: inherit;
+    transition: color 0.2s; position: relative;
+  }
+  .nav-link:hover { color: var(--text); }
+  .nav-link::after {
+    content: ""; position: absolute;
+    left: 0; bottom: -6px; width: 0; height: 1px;
+    background: var(--accent); transition: width 0.3s ease;
+  }
+  .nav-link:hover::after { width: 100%; }
+
+  .lang-switch-wrap { position: relative; }
+  .lang-switch {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 8px;
+    border: 1px solid var(--border-strong);
+    background: rgba(255,255,255,0.03);
+    font-size: 12px; color: var(--text-2);
+    font-family: "JetBrains Mono", monospace;
+    cursor: none;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .lang-switch:hover { background: rgba(255,255,255,0.07); color: var(--text); border-color: rgba(255,255,255,0.25); }
+  .lang-switch svg { opacity: 0.6; transition: transform 0.3s; }
+  .lang-switch.open svg { transform: rotate(180deg); }
+  .lang-menu {
+    position: absolute; top: calc(100% + 8px); right: 0;
+    background: rgba(20,20,22,0.95);
+    backdrop-filter: saturate(180%) blur(20px);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    padding: 6px;
+    min-width: 140px;
+    display: flex; flex-direction: column; gap: 1px;
+    opacity: 0; transform: translateY(-6px) scale(0.96);
+    transform-origin: top right;
+    pointer-events: none;
+    transition: opacity 0.25s, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+  }
+  .lang-menu.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+  .lang-menu button {
+    background: none; border: none;
+    text-align: left; padding: 8px 12px;
+    font-size: 13px; color: var(--text-2);
+    border-radius: 6px;
+    cursor: none;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+  }
+  .lang-menu button:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+  .lang-menu button.active { background: rgba(48,209,88,0.12); color: var(--accent); }
+
+  /* Logo squircle */
+  .logo-squircle {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #5fe986 0%, #30d158 50%, #1f9942 100%);
+    display: grid; place-items: center;
+    box-shadow: 0 0 0 0.5px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 12px rgba(48,209,88,0.25);
+    position: relative;
+  }
+  .logo-squircle.big {
+    width: 120px; height: 120px;
+    border-radius: 28px;
+    box-shadow: 0 0 0 0.5px rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.25), 0 30px 80px rgba(48,209,88,0.45), 0 0 100px rgba(48,209,88,0.3);
+  }
+  .logo-squircle svg { color: white; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3)); }
+
+  .container {
+    max-width: 1200px; margin: 0 auto;
+    padding: 0 32px; position: relative; z-index: 2;
+  }
+
+  /* HERO */
+  .hero {
+    position: relative; min-height: 100vh;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    text-align: center;
+    padding: 140px 32px 80px;
+    z-index: 2;
+  }
+  .hero-logo-wrap {
+    margin-bottom: 36px;
+    opacity: 0;
+    transform: translateY(20px) scale(0.85);
+    transition: opacity 1s ease, transform 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+    position: relative;
+  }
+  .hero.in .hero-logo-wrap { opacity: 1; transform: translateY(0) scale(1); }
+
+  .hero-logo-wrap::after {
+    content: "";
+    position: absolute;
+    inset: -40px;
+    background: radial-gradient(circle, var(--glow) 0%, transparent 60%);
+    z-index: -1;
+    animation: logoPulse 4s ease-in-out infinite;
+  }
+  @keyframes logoPulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.15); }
+  }
+
+  .hero-title {
+    font-size: clamp(44px, 7.5vw, 88px);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1.0;
+    max-width: 16ch;
+    margin-bottom: 24px;
+    text-wrap: balance;
+  }
+  .hero-title .word { display: inline-block; vertical-align: baseline; line-height: 1.15; }
+  .hero-title .word > span {
+    display: inline-block;
+    transform: translateY(110%); opacity: 0;
+    transition: transform 1.1s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.8s;
+  }
+  .hero-title.in .word > span { transform: translateY(0); opacity: 1; }
+  .gradient-text {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero-sub {
+    font-size: clamp(17px, 1.5vw, 21px);
+    color: var(--text-2);
+    max-width: 50ch; margin: 0 auto 36px;
+    opacity: 0; transform: translateY(20px);
+    transition: opacity 1s ease 0.6s, transform 1s cubic-bezier(0.22, 1, 0.36, 1) 0.6s;
+  }
+  .hero.in .hero-sub { opacity: 1; transform: translateY(0); }
+
+  .hero-cta {
+    display: flex; gap: 14px; margin-bottom: 22px;
+    opacity: 0; transform: translateY(20px);
+    transition: opacity 1s ease 0.8s, transform 1s cubic-bezier(0.22, 1, 0.36, 1) 0.8s;
+  }
+  .hero.in .hero-cta { opacity: 1; transform: translateY(0); }
+
+  .btn {
+    position: relative; display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 24px; border-radius: 100px;
+    font-size: 15px; font-weight: 600; letter-spacing: -0.01em;
+    text-decoration: none; border: none; cursor: none;
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s;
+    will-change: transform; overflow: hidden; isolation: isolate;
+  }
+  .btn-primary {
+    background: var(--accent); color: #001a08;
+    box-shadow: 0 8px 30px rgba(48,209,88,0.25), inset 0 1px 0 rgba(255,255,255,0.3);
+  }
+  .btn-primary::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(135deg, #5fe986 0%, var(--accent) 50%, #1f9942 100%);
+    opacity: 0; transition: opacity 0.3s; z-index: -1;
+  }
+  .btn-primary:hover { box-shadow: 0 12px 40px rgba(48,209,88,0.45), inset 0 1px 0 rgba(255,255,255,0.4); }
+  .btn-primary:hover::before { opacity: 1; }
+  .btn-secondary {
+    background: rgba(255,255,255,0.08); color: var(--text);
+    border: 1px solid var(--border-strong); backdrop-filter: blur(10px);
+  }
+  .btn-secondary:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.25); }
+  .btn .ripple {
+    position: absolute; border-radius: 50%;
+    transform: scale(0); animation: ripple 0.7s ease-out;
+    background: rgba(255,255,255,0.4); pointer-events: none;
+  }
+  @keyframes ripple { to { transform: scale(4); opacity: 0; } }
+
+  .hero-meta {
+    font-size: 12px; color: var(--text-3);
+    font-family: "JetBrains Mono", monospace; letter-spacing: 0.02em;
+    opacity: 0; transition: opacity 1s ease 1s;
+  }
+  .hero.in .hero-meta { opacity: 1; }
+
+  /* Sections base */
+  section { position: relative; padding: 140px 0; z-index: 2; }
+  .section-eyebrow {
+    font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.18em; color: var(--accent);
+    font-family: "JetBrains Mono", monospace;
+    margin-bottom: 16px; text-align: center;
+  }
+  .section-title {
+    font-size: clamp(36px, 5vw, 64px);
+    font-weight: 700; letter-spacing: -0.03em;
+    line-height: 1.05; text-align: center;
+    margin-bottom: 16px; text-wrap: balance;
+  }
+  .section-sub {
+    font-size: 18px; color: var(--text-2);
+    text-align: center; max-width: 56ch;
+    margin: 0 auto 80px;
+  }
+
+  /* SCREENSHOTS — "Come si presenta" */
+  .screenshots-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    perspective: 1500px;
+  }
+  @media (max-width: 900px) { .screenshots-grid { grid-template-columns: 1fr; } }
+
+  .screenshot-card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 18px;
+    overflow: hidden;
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.4s, box-shadow 0.4s;
+    transform-style: preserve-3d;
+    will-change: transform;
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  .screenshot-card.in { opacity: 1; transform: translateY(0); }
+  .screenshot-card.featured {
+    border-color: rgba(48,209,88,0.35);
+    box-shadow: 0 0 60px rgba(48,209,88,0.08);
+  }
+  .screenshot-card::before {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(400px circle at var(--mx, 50%) var(--my, 50%), rgba(48,209,88,0.1), transparent 40%);
+    opacity: 0; transition: opacity 0.4s; pointer-events: none;
+  }
+  .screenshot-card:hover::before { opacity: 1; }
+  .screenshot-card:hover {
+    border-color: var(--border-strong);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.4), 0 0 80px rgba(48,209,88,0.1);
+  }
+
+  /* Mock app screenshot built from CSS — looks like a real app, no fake imagery */
+  .ss-window {
+    background: linear-gradient(180deg, #1c1c1e 0%, #161618 100%);
+    border-radius: 12px;
+    overflow: hidden;
+    height: 200px;
+    position: relative;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .ss-titlebar {
+    height: 22px;
+    background: #2a2a2c;
+    display: flex; align-items: center;
+    padding: 0 10px; gap: 5px;
+    border-bottom: 1px solid rgba(0,0,0,0.4);
+  }
+  .ss-titlebar i {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .ss-titlebar i:nth-child(1) { background: #ff5f57; }
+  .ss-titlebar i:nth-child(2) { background: #ffbd2e; }
+  .ss-titlebar i:nth-child(3) { background: #28ca42; }
+  .ss-content {
+    padding: 14px;
+    height: calc(100% - 22px);
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 10px;
+    font-size: 7px;
+    line-height: 1.4;
+    color: var(--text-2);
+  }
+  .ss-sidebar {
+    background: rgba(0,0,0,0.25);
+    border-radius: 5px;
+    padding: 8px 5px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .ss-side-row {
+    display: flex; align-items: center; gap: 4px;
+    padding: 3px 4px;
+    border-radius: 3px;
+    font-size: 6px;
+  }
+  .ss-side-row.active { background: rgba(48,209,88,0.15); color: var(--accent); }
+  .ss-side-dot {
+    width: 6px; height: 6px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 1.5px;
+    flex-shrink: 0;
+  }
+  .ss-side-row.active .ss-side-dot { background: var(--accent); }
+  .ss-main {
+    display: flex; flex-direction: column;
+    gap: 4px;
+    overflow: hidden;
+  }
+  .ss-row {
+    display: flex; justify-content: space-between;
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 7px;
+  }
+  .ss-row .v { color: var(--text); font-family: "JetBrains Mono", monospace; }
+  .ss-row .v.green { color: var(--accent); }
+  .ss-row .v.cyan { color: var(--accent-2); }
+  .ss-chart {
+    margin-top: 4px;
+    height: 32px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .ss-chart svg { width: 100%; height: 100%; display: block; }
+
+  /* Settings sheet variant */
+  .ss-sheet {
+    position: absolute;
+    inset: 30px 25px;
+    background: rgba(40,40,42,0.96);
+    backdrop-filter: blur(20px);
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    padding: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    display: flex; flex-direction: column;
+    gap: 6px;
+  }
+  .ss-sheet-title {
+    font-size: 8px; font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .ss-sheet-row {
+    display: flex; justify-content: space-between;
+    align-items: center;
+    font-size: 7px;
+    padding: 3px 0;
+    color: var(--text-2);
+  }
+  .ss-toggle {
+    width: 16px; height: 9px;
+    background: var(--accent);
+    border-radius: 9px;
+    position: relative;
+  }
+  .ss-toggle::after {
+    content: "";
+    position: absolute;
+    right: 1px; top: 1px;
+    width: 7px; height: 7px;
+    background: white;
+    border-radius: 50%;
+  }
+  .ss-toggle.off { background: rgba(255,255,255,0.15); }
+  .ss-toggle.off::after { right: auto; left: 1px; }
+
+  .ss-caption {
+    font-size: 13px;
+    color: var(--text-2);
+    line-height: 1.5;
+    padding: 14px 6px 6px;
+  }
+
+  /* HERO Visual / dashboard preview (smaller, inside hero) */
+  .hero-visual {
+    margin-top: 70px;
+    width: 100%; max-width: 1100px;
+    min-height: 620px;
+    perspective: 1800px;
+    opacity: 0; transform: translateY(60px);
+    transition: opacity 1.4s ease 0.4s, transform 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.4s;
+  }
+  .hero.in .hero-visual { opacity: 1; transform: translateY(0); }
+  .macbook { position: relative; transform-style: preserve-3d; will-change: transform; perspective: 2400px; }
+
+  /* Lid open animation */
+  .macbook-screen {
+    transform-origin: 50% 100%;
+    transform: rotateX(-92deg);
+    opacity: 0.4;
+    transition: transform 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.6s, opacity 0.8s ease 0.6s;
+  }
+  .hero.in .macbook-screen { transform: rotateX(0deg); opacity: 1; }
+
+  /* Dashboard "boot" */
+  .dashboard {
+    opacity: 0;
+    transition: opacity 0.6s ease 1.7s;
+  }
+  .hero.in .dashboard { opacity: 1; }
+
+  /* Subtle screen flicker on power-up */
+  .macbook-screen::after {
+    content: ""; position: absolute; inset: 0;
+    background: rgba(255,255,255,0);
+    pointer-events: none; z-index: 6;
+    animation: screenBoot 1.6s ease 1.4s forwards;
+  }
+  @keyframes screenBoot {
+    0% { background: rgba(255,255,255,0); }
+    20% { background: rgba(255,255,255,0.12); }
+    35% { background: rgba(255,255,255,0); }
+    50% { background: rgba(255,255,255,0.06); }
+    100% { background: rgba(255,255,255,0); }
+  }
+
+  /* Stagger device rows + stat cards */
+  .device-row, .stat-card {
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .hero.in .device-row { opacity: 1; transform: translateY(0); }
+  .hero.in .stat-card { opacity: 1; transform: translateY(0); }
+  .hero.in .device-row:nth-child(2) { transition-delay: 2.0s; }
+  .hero.in .device-row:nth-child(3) { transition-delay: 2.1s; }
+  .hero.in .device-row:nth-child(4) { transition-delay: 2.2s; }
+  .hero.in .stat-card:nth-child(1) { transition-delay: 2.0s; }
+  .hero.in .stat-card:nth-child(2) { transition-delay: 2.1s; }
+  .hero.in .stat-card:nth-child(3) { transition-delay: 2.2s; }
+  .chart-card { opacity: 0; transition: opacity 0.6s ease 2.4s; }
+  .hero.in .chart-card { opacity: 1; }
+  .macbook-screen {
+    position: relative;
+    min-height: 540px;
+    background: #0a0a0a;
+    border: 8px solid #1a1a1c;
+    border-radius: 18px;
+    padding: 28px;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 60px 120px rgba(0,0,0,0.7), 0 0 80px rgba(48,209,88,0.15);
+    overflow: hidden;
+  }
+  .macbook-screen::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 18px; background: #1a1a1c;
+    border-radius: 0 0 8px 8px;
+    width: 90px; margin: 0 auto; z-index: 5;
+  }
+  .macbook-base {
+    height: 14px;
+    background: linear-gradient(180deg, #2a2a2c 0%, #0c0c0d 100%);
+    border-radius: 0 0 14px 14px;
+    margin: 0 -20px; position: relative;
+  }
+  .macbook-base::after {
+    content: ""; position: absolute;
+    top: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 90px; height: 4px;
+    background: #050505;
+    border-radius: 0 0 6px 6px;
+  }
+
+  .dashboard {
+    display: grid; grid-template-columns: 280px 1fr;
+    gap: 20px; min-height: 480px;
+  }
+  .dash-side {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px;
+  }
+  .dash-side-title {
+    font-size: 11px; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 14px;
+  }
+  .device-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 8px; border-radius: 8px;
+    cursor: none; transition: background 0.2s;
+    margin-bottom: 4px;
+  }
+  .device-row.active { background: rgba(48,209,88,0.08); }
+  .device-row:hover { background: rgba(255,255,255,0.04); }
+  .device-icon {
+    width: 32px; height: 32px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 8px;
+    display: grid; place-items: center;
+    font-size: 16px;
+  }
+  .device-info { flex: 1; min-width: 0; }
+  .device-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .device-meta { font-size: 11px; color: var(--text-3); font-family: "JetBrains Mono", monospace; }
+  .device-pct { font-size: 12px; font-weight: 600; color: var(--accent); font-family: "JetBrains Mono", monospace; }
+
+  .dash-main { display: grid; grid-template-rows: auto 1fr; gap: 16px; }
+  .stats-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 12px; }
+  .stat-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+    position: relative; overflow: hidden;
+  }
+  .stat-label { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .stat-value { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .stat-unit { font-size: 14px; color: var(--text-3); font-weight: 500; margin-left: 4px; }
+  .stat-trend { font-size: 11px; color: var(--accent); margin-top: 4px; font-family: "JetBrains Mono", monospace; }
+
+  .ring-card { display: flex; align-items: center; gap: 16px; }
+  .ring-svg { width: 64px; height: 64px; flex-shrink: 0; }
+  .ring-track { stroke: rgba(255,255,255,0.08); }
+  .ring-prog {
+    stroke: var(--accent); stroke-linecap: round;
+    filter: drop-shadow(0 0 6px var(--glow));
+    transition: stroke-dashoffset 1.5s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .chart-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+    position: relative; overflow: hidden;
+  }
+  .chart-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .chart-title { font-size: 13px; font-weight: 500; }
+  .chart-legend { font-size: 11px; color: var(--text-3); font-family: "JetBrains Mono", monospace; }
+  .chart-svg { width: 100%; height: 160px; }
+
+  /* STICKY SHOWCASE */
+  .showcase { position: relative; min-height: 380vh; }
+  .showcase-pin {
+    position: sticky; top: 0; height: 100vh;
+    display: grid; grid-template-columns: 1fr 1fr;
+    align-items: center; gap: 60px;
+    padding: 0 60px; overflow: hidden;
+  }
+  .showcase-text { position: relative; min-height: 280px; }
+  .showcase-text-eyebrow {
+    font-size: 12px; color: var(--accent);
+    font-family: "JetBrains Mono", monospace;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    margin-bottom: 14px;
+  }
+  .showcase-text-title {
+    font-size: clamp(32px, 4.2vw, 56px);
+    font-weight: 700; letter-spacing: -0.03em;
+    line-height: 1.05; margin-bottom: 20px;
+  }
+  .showcase-text-body {
+    font-size: 17px; color: var(--text-2);
+    line-height: 1.6; max-width: 44ch;
+  }
+  .showcase-step {
+    position: absolute; inset: 0;
+    opacity: 0; transform: translateY(30px);
+    transition: opacity 0.5s, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+  .showcase-step.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+  .showcase-visual {
+    position: relative; height: 70vh;
+    display: grid; place-items: center;
+  }
+  .showcase-vis-step {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    opacity: 0; transform: scale(0.95);
+    transition: opacity 0.6s, transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .showcase-vis-step.active { opacity: 1; transform: scale(1); }
+
+  .showcase-progress {
+    position: absolute; left: 30px; top: 50%;
+    transform: translateY(-50%);
+    width: 2px; height: 200px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+  }
+  .showcase-progress-fill {
+    position: absolute; left: 0; top: 0;
+    width: 100%; background: var(--accent);
+    border-radius: 2px;
+    box-shadow: 0 0 8px var(--glow);
+    transition: height 0.3s ease;
+  }
+  .showcase-dots {
+    position: absolute; left: 26px; top: 50%;
+    transform: translateY(-50%);
+    height: 200px;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+  }
+  .showcase-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    border: 2px solid var(--bg);
+    transition: background 0.3s;
+  }
+  .showcase-dot.active { background: var(--accent); }
+
+  .big-battery { position: relative; width: 360px; height: 180px; }
+  .battery-shell {
+    width: 100%; height: 100%;
+    border: 3px solid rgba(255,255,255,0.4);
+    border-radius: 24px;
+    position: relative; overflow: hidden;
+    background: rgba(255,255,255,0.02);
+  }
+  .battery-tip {
+    position: absolute; right: -10px; top: 50%;
+    transform: translateY(-50%);
+    width: 10px; height: 60px;
+    background: rgba(255,255,255,0.4);
+    border-radius: 0 4px 4px 0;
+  }
+  .battery-fill {
+    position: absolute; left: 6px; top: 6px; bottom: 6px;
+    background: linear-gradient(90deg, #1f9942, var(--accent));
+    border-radius: 18px;
+    box-shadow: 0 0 30px var(--glow);
+    transition: width 1.5s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .battery-fill::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.3) 0%, transparent 50%);
+    border-radius: 18px;
+  }
+  .battery-fill::before {
+    content: ""; position: absolute;
+    top: 0; bottom: 0; right: 0; width: 40px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    animation: shimmer 2.5s ease-in-out infinite;
+  }
+  @keyframes shimmer { 0%{transform:translateX(-300px);} 100%{transform:translateX(40px);} }
+  .battery-label {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center; gap: 0.05em;
+    flex-direction: row;
+    font-size: 36px; font-weight: 800;
+    letter-spacing: -0.02em; color: white;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    font-variant-numeric: tabular-nums; z-index: 2;
+  }
+
+  .big-ring { width: 320px; height: 320px; }
+  .big-ring-track { stroke: rgba(255,255,255,0.08); }
+  .big-ring-prog {
+    stroke: var(--accent); stroke-linecap: round;
+    filter: drop-shadow(0 0 16px var(--glow));
+    transition: stroke-dashoffset 1.5s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .big-ring-prog.cyan { stroke: var(--accent-2); filter: drop-shadow(0 0 16px rgba(0,212,255,0.6)); }
+  .ring-pct { font-size: 64px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .ring-pct-label { font-size: 12px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.15em; margin-top: 10px; white-space: nowrap; }
+  .ring-wrap { position: relative; display: grid; place-items: center; width: 320px; height: 320px; }
+  .ring-wrap .big-ring { position: absolute; inset: 0; }
+  .ring-wrap .ring-center { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; z-index: 2; }
+
+  .forecast-svg { width: 380px; height: 260px; }
+  .forecast-line {
+    stroke: var(--accent); fill: none;
+    stroke-width: 2.5; stroke-linecap: round;
+    filter: drop-shadow(0 0 8px var(--glow));
+    stroke-dasharray: 800; stroke-dashoffset: 800;
+    transition: stroke-dashoffset 2s ease;
+  }
+  .forecast-line.in { stroke-dashoffset: 0; }
+  .forecast-area { fill: url(#forecastGrad); opacity: 0; transition: opacity 1.5s ease 0.5s; }
+  .forecast-area.in { opacity: 1; }
+  .forecast-dot { fill: var(--accent); filter: drop-shadow(0 0 4px var(--glow)); opacity: 0; transition: opacity 0.3s; }
+  .forecast-dot.in { opacity: 1; }
+  .forecast-grid line { stroke: rgba(255,255,255,0.05); }
+
+  /* FEATURES */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 900px) { .features-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) { .features-grid { grid-template-columns: 1fr; } }
+
+  .feature {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 28px;
+    overflow: hidden;
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.4s, background 0.4s;
+    transform-style: preserve-3d;
+    will-change: transform;
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  .feature.in {
+    opacity: 1; transform: translateY(0);
+    transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.4s, background 0.4s;
+  }
+  .feature::before {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(400px circle at var(--mx, 50%) var(--my, 50%), rgba(48, 209, 88, 0.12), transparent 40%);
+    opacity: 0; transition: opacity 0.4s; pointer-events: none;
+  }
+  .feature:hover::before { opacity: 1; }
+  .feature:hover { border-color: var(--border-strong); background: var(--surface-2); }
+  .feature-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: grid; place-items: center;
+    background: rgba(48, 209, 88, 0.1);
+    border: 1px solid rgba(48, 209, 88, 0.2);
+    margin-bottom: 18px; color: var(--accent);
+    transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .feature:hover .feature-icon { transform: scale(1.1) rotate(-6deg); }
+  .feature-icon svg { width: 22px; height: 22px; }
+  .feature-icon.cyan { background: rgba(0,212,255,0.1); border-color: rgba(0,212,255,0.2); color: var(--accent-2); }
+  .feature-icon.warn { background: rgba(255,159,10,0.1); border-color: rgba(255,159,10,0.2); color: var(--accent-warn); }
+  .feature-icon.red { background: rgba(255,69,58,0.1); border-color: rgba(255,69,58,0.2); color: var(--accent-bad); }
+  .feature-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 8px; }
+  .feature-body { font-size: 14px; color: var(--text-2); line-height: 1.5; }
+  .feature-body code {
+    font-family: "JetBrains Mono", monospace;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 6px; border-radius: 4px;
+    font-size: 12px; color: var(--accent);
+  }
+
+  /* DOWNLOAD */
+  .download-wrap { text-align: center; }
+  .download-btn { margin: 0 auto 16px; }
+  .download-meta {
+    font-size: 12px; color: var(--text-3);
+    font-family: "JetBrains Mono", monospace;
+    margin-bottom: 60px;
+  }
+  .install-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; max-width: 900px; margin: 0 auto;
+  }
+  @media (max-width: 700px) { .install-grid { grid-template-columns: 1fr; } }
+  .install-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px; padding: 28px;
+    text-align: left;
+    opacity: 0; transform: translateY(30px);
+    transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .install-card.in { opacity: 1; transform: translateY(0); }
+  .install-title {
+    font-size: 16px; font-weight: 600;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .install-title-num {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(48,209,88,0.15); color: var(--accent);
+    font-size: 11px; font-weight: 700;
+    display: grid; place-items: center;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .install-body { font-size: 14px; color: var(--text-2); line-height: 1.6; margin-bottom: 14px; }
+  .install-body a { color: var(--accent-2); text-decoration: none; }
+  .install-body a:hover { text-decoration: underline; }
+  .install-body code {
+    font-family: "JetBrains Mono", monospace;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 6px; border-radius: 4px;
+    font-size: 12px; color: var(--accent);
+  }
+  .terminal {
+    background: #050505; border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px; color: var(--text);
+    position: relative; overflow: hidden;
+  }
+  .terminal-prompt { color: var(--accent); margin-right: 8px; }
+  .terminal-caret {
+    display: inline-block; width: 8px; height: 14px;
+    background: var(--accent); vertical-align: text-bottom;
+    margin-left: 2px; animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* BUILD */
+  .build-section { padding: 100px 0; }
+  .build-terminal {
+    max-width: 720px; margin: 0 auto;
+    background: #050505;
+    border: 1px solid var(--border);
+    border-radius: 14px; padding: 0;
+    overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+  }
+  .term-header {
+    display: flex; align-items: center; gap: 6px;
+    padding: 12px 16px; background: #0d0d0e;
+    border-bottom: 1px solid var(--border);
+  }
+  .term-dot { width: 12px; height: 12px; border-radius: 50%; }
+  .term-dot.r { background: #ff5f57; }
+  .term-dot.y { background: #ffbd2e; }
+  .term-dot.g { background: #28ca42; }
+  .term-title {
+    flex: 1; text-align: center;
+    font-size: 12px; color: var(--text-3);
+    font-family: "JetBrains Mono", monospace;
+  }
+  .term-body {
+    padding: 20px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13.5px; line-height: 1.8;
+  }
+  .term-line { display: block; min-height: 1.8em; }
+  .term-line .prompt { color: var(--accent); }
+  .term-line .cmd { color: var(--text); }
+  .term-line .out { color: var(--text-2); }
+  .build-meta {
+    text-align: center; color: var(--text-3);
+    font-size: 13px; margin-top: 30px;
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  footer {
+    padding: 60px 0 80px; text-align: center;
+    border-top: 1px solid var(--border);
+    margin-top: 80px;
+    color: var(--text-3); font-size: 13px;
+  }
+  footer a { color: var(--accent-2); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  .reveal {
+    opacity: 0; transform: translateY(30px);
+    transition: opacity 0.9s ease, transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal.in { opacity: 1; transform: translateY(0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .hero { padding: 110px 20px 60px; }
+    .nav { padding: 14px 20px; }
+    .nav-links { gap: 14px; font-size: 12px; }
+    .dashboard { grid-template-columns: 1fr; }
+    .dash-side { display: none; }
+    .showcase-pin { grid-template-columns: 1fr; padding: 0 20px; }
+    .showcase-progress, .showcase-dots { display: none; }
+    section { padding: 80px 0; }
+  }
+</style>
+
+<script>
+  window.__TWEAKS__ = /*EDITMODE-BEGIN*/{
+    "accent": "#00d10d",
+    "intensity": 10,
+    "showCursor": true,
+    "magnetic": true,
+    "particles": true,
+    "auroraOn": true,
+    "stickyShowcase": true
+  }/*EDITMODE-END*/;
+</script>
 </head>
 <body>
-    <header class="hero">
-        <nav>
-            <span class="brand">
-                <img src="icon.png" alt="" class="logo">
-                <span>Doctor Battery</span>
-            </span>
-            <div class="nav-links">
-                <a href="#features" data-i18n="nav.features">Features</a>
-                <a href="#preview" data-i18n="nav.preview">Preview</a>
-                <a href="#download" data-i18n="nav.download">Download</a>
-                <a href="https://github.com/Gianmarco0001/Doctor-Battery" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
-                <select id="lang-switch" class="lang-switch" aria-label="Language">
-                    <option value="en">EN</option>
-                    <option value="it">IT</option>
-                    <option value="fr">FR</option>
-                    <option value="de">DE</option>
-                    <option value="es">ES</option>
-                </select>
-            </div>
-        </nav>
-        <div class="hero-content">
-            <img src="icon.png" alt="Doctor Battery icon" class="hero-icon">
-            <h1 data-i18n="hero.title">Free battery diagnostics<br>for Mac, iPhone &amp; iPad</h1>
-            <p class="tagline" data-i18n="hero.tagline">Open-source. No telemetry. All data stays on your Mac.</p>
-            <div class="cta">
-                <a class="btn primary" href="#download" data-i18n="hero.cta.download">Download for macOS</a>
-                <a class="btn secondary" href="https://github.com/Gianmarco0001/Doctor-Battery" target="_blank" rel="noopener" data-i18n="hero.cta.github">View on GitHub</a>
-            </div>
-            <p class="meta" data-i18n="hero.meta">Universal binary · Apple Silicon + Intel · macOS 13+</p>
+  <div class="cursor-ring" id="cursorRing"></div>
+  <div class="cursor-dot" id="cursorDot"></div>
+
+  <div class="aurora" id="aurora"></div>
+  <canvas id="particles" style="position:fixed;inset:0;z-index:1;pointer-events:none;"></canvas>
+
+  <nav class="nav" id="nav">
+    <div class="nav-brand">
+      <div class="logo-squircle">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="8" width="16" height="9" rx="2"/>
+          <line x1="20" y1="11" x2="20" y2="14"/>
+          <line x1="11" y1="10.5" x2="11" y2="14.5"/>
+          <line x1="9" y1="12.5" x2="13" y2="12.5"/>
+        </svg>
+      </div>
+      <span>Doctor Battery</span>
+    </div>
+    <div class="nav-links">
+      <a class="nav-link" href="#features" data-i18n="nav.features">Features</a>
+      <a class="nav-link" href="#preview" data-i18n="nav.preview">Preview</a>
+      <a class="nav-link" href="#download" data-i18n="nav.download">Download</a>
+      <a class="nav-link" href="#build" data-i18n="nav.source">GitHub</a>
+      <div class="lang-switch-wrap">
+        <button class="lang-switch" id="langSwitch" type="button">
+          <span id="langCurrent">EN</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        <div class="lang-menu" id="langMenu">
+          <button data-lang="en">English</button>
+          <button data-lang="it">Italiano</button>
+          <button data-lang="fr">Français</button>
+          <button data-lang="es">Español</button>
+          <button data-lang="de">Deutsch</button>
         </div>
-    </header>
+      </div>
+    </div>
+  </nav>
 
-    <section id="preview" class="preview">
-        <h2 data-i18n="preview.title">What it looks like</h2>
-        <div class="screenshots">
-            <figure>
-                <img src="screenshot-mac.png" alt="Mac battery view" loading="lazy">
-                <figcaption data-i18n="preview.cap.mac">Mac · cycle count, raw FCC health, live wattage, adapter quality, history chart</figcaption>
-            </figure>
-            <figure>
-                <img src="screenshot-ios.png" alt="iPad / iPhone detail" loading="lazy">
-                <figcaption data-i18n="preview.cap.ios">iPhone &amp; iPad · USB or Wi-Fi via libimobiledevice</figcaption>
-            </figure>
-            <figure>
-                <img src="screenshot-settings.png" alt="Settings panel" loading="lazy">
-                <figcaption data-i18n="preview.cap.settings">Settings · launch at login, log interval, language, all thresholds</figcaption>
-            </figure>
+  <!-- HERO -->
+  <header class="hero" id="hero">
+    <div class="hero-logo-wrap">
+      <div class="logo-squircle big">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="8" width="16" height="9" rx="2"/>
+          <line x1="20" y1="11" x2="20" y2="14"/>
+          <line x1="11" y1="10.5" x2="11" y2="14.5"/>
+          <line x1="9" y1="12.5" x2="13" y2="12.5"/>
+        </svg>
+      </div>
+    </div>
+
+    <h1 class="hero-title" id="heroTitle">
+      <span class="word"><span>Diagnostica</span></span>
+      <span class="word"><span class="gradient-text">batteria</span></span>
+      <span class="word"><span>gratuita</span></span>
+      <br/>
+      <span class="word"><span>per Mac,</span></span>
+      <span class="word"><span>iPhone</span></span>
+      <span class="word"><span>e</span></span>
+      <span class="word"><span>iPad.</span></span>
+    </h1>
+    <p class="hero-sub" data-i18n="hero.sub">Open source. Nessuna telemetria. Tutto resta sul tuo Mac.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#download" data-magnet>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        <span data-i18n="hero.cta1">Scarica per macOS</span>
+      </a>
+      <a class="btn btn-secondary" href="#build" data-magnet>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/>
+        </svg>
+        <span data-i18n="hero.cta2">Vedi su GitHub</span>
+      </a>
+    </div>
+    <div class="hero-meta" data-i18n="hero.meta">Universal binary · Apple Silicon + Intel · macOS 13+</div>
+
+    <div class="hero-visual" id="heroVisual">
+      <div class="macbook" id="macbook">
+        <div class="macbook-screen">
+          <div class="dashboard">
+            <aside class="dash-side">
+              <div class="dash-side-title" data-i18n="dash.devices">Dispositivi</div>
+              <div class="device-row active">
+                <div class="device-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <rect x="2" y="4" width="20" height="14" rx="2"/><path d="M2 20h20"/>
+                  </svg>
+                </div>
+                <div class="device-info">
+                  <div class="device-name">MacBook Pro 14"</div>
+                  <div class="device-meta">M3 · 287 <span data-i18n="dash.cycles">cicli</span></div>
+                </div>
+                <div class="device-pct" data-counter data-target="94">0%</div>
+              </div>
+              <div class="device-row">
+                <div class="device-icon">
+                  <svg width="14" height="18" viewBox="0 0 14 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <rect x="1" y="1" width="12" height="22" rx="2.5"/><line x1="6" y1="20" x2="8" y2="20"/>
+                  </svg>
+                </div>
+                <div class="device-info">
+                  <div class="device-name">iPhone 15 Pro</div>
+                  <div class="device-meta">A17 · 412 <span data-i18n="dash.cycles">cicli</span></div>
+                </div>
+                <div class="device-pct" data-counter data-target="89">0%</div>
+              </div>
+              <div class="device-row">
+                <div class="device-icon">
+                  <svg width="16" height="18" viewBox="0 0 16 18" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <rect x="1" y="1" width="14" height="16" rx="1.5"/>
+                  </svg>
+                </div>
+                <div class="device-info">
+                  <div class="device-name">iPad Pro 11"</div>
+                  <div class="device-meta">M2 · 198 <span data-i18n="dash.cycles">cicli</span></div>
+                </div>
+                <div class="device-pct" data-counter data-target="96">0%</div>
+              </div>
+            </aside>
+            <div class="dash-main">
+              <div class="stats-row">
+                <div class="stat-card ring-card">
+                  <svg class="ring-svg" viewBox="0 0 64 64">
+                    <circle class="ring-track" cx="32" cy="32" r="26" stroke-width="6" fill="none"/>
+                    <circle class="ring-prog" id="heroRing" cx="32" cy="32" r="26" stroke-width="6" fill="none"
+                      stroke-dasharray="163.36" stroke-dashoffset="163.36" transform="rotate(-90 32 32)"/>
+                  </svg>
+                  <div>
+                    <div class="stat-label" data-i18n="dash.health">Salute</div>
+                    <div class="stat-value"><span data-counter data-target="94">0</span><span class="stat-unit">%</span></div>
+                    <div class="stat-trend">▲ FCC 4823 mAh</div>
+                  </div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-label" data-i18n="dash.cyclesLabel">Cicli</div>
+                  <div class="stat-value" data-counter data-target="287">0</div>
+                  <div class="stat-trend" data-i18n="dash.remaining">713 rimasti · ~3,8 anni</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-label" data-i18n="dash.temp">Temperatura</div>
+                  <div class="stat-value"><span data-counter data-target="32" data-decimals="1">0</span><span class="stat-unit">°C</span></div>
+                  <div class="stat-trend" data-i18n="dash.tempTrend">Range ottimale</div>
+                </div>
+              </div>
+              <div class="chart-card">
+                <div class="chart-header">
+                  <div class="chart-title" data-i18n="dash.forecastTitle">Previsione salute</div>
+                  <div class="chart-legend" data-i18n="dash.forecastLegend">12 mesi · regressione lineare</div>
+                </div>
+                <svg class="chart-svg" id="heroChart" viewBox="0 0 600 160" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#30d158" stop-opacity="0.4"/>
+                      <stop offset="100%" stop-color="#30d158" stop-opacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <g class="chart-grid">
+                    <line x1="0" y1="40" x2="600" y2="40" stroke="rgba(255,255,255,0.05)"/>
+                    <line x1="0" y1="80" x2="600" y2="80" stroke="rgba(255,255,255,0.05)"/>
+                    <line x1="0" y1="120" x2="600" y2="120" stroke="rgba(255,255,255,0.05)"/>
+                  </g>
+                  <path id="heroChartArea" d="" fill="url(#heroGrad)" opacity="0"/>
+                  <path id="heroChartLine" d="" stroke="#30d158" stroke-width="2" fill="none" stroke-linecap="round"
+                    style="filter: drop-shadow(0 0 6px rgba(48,209,88,0.5)); stroke-dasharray: 1200; stroke-dashoffset: 1200; transition: stroke-dashoffset 2.2s ease;"/>
+                </svg>
+              </div>
+            </div>
+          </div>
         </div>
-    </section>
+        <div class="macbook-base"></div>
+      </div>
+    </div>
+  </header>
 
-    <section id="features" class="features">
-        <h2 data-i18n="features.title">Everything you need to know about your batteries</h2>
-        <div class="grid">
-            <div class="card">
-                <div class="card-icon">📊</div>
-                <h3 data-i18n="f1.t">Real raw FCC health</h3>
-                <p data-i18n="f1.d">Reads the gas-gauge IC directly. Same numbers Apple's own diagnostics use, exposed transparently.</p>
+  <!-- COME SI PRESENTA — Screenshots -->
+  <section id="preview">
+    <div class="container">
+      <div class="section-eyebrow reveal" data-i18n="preview.eyebrow">/* anteprima */</div>
+      <h2 class="section-title reveal" data-i18n="preview.title">Come si presenta.</h2>
+      <p class="section-sub reveal" data-i18n="preview.sub">Tre viste, un'app. Tutto quello che ti serve, nessuna distrazione.</p>
+
+      <div class="screenshots-grid">
+        <!-- Card 1: Mac -->
+        <div class="screenshot-card">
+          <div class="ss-window">
+            <div class="ss-titlebar"><i></i><i></i><i></i></div>
+            <div class="ss-content">
+              <div class="ss-sidebar">
+                <div class="ss-side-row active"><span class="ss-side-dot"></span>Mac</div>
+                <div class="ss-side-row"><span class="ss-side-dot"></span>iPhone</div>
+                <div class="ss-side-row"><span class="ss-side-dot"></span>iPad</div>
+              </div>
+              <div class="ss-main">
+                <div class="ss-row"><span>Cicli</span><span class="v green">287</span></div>
+                <div class="ss-row"><span>Salute (FCC)</span><span class="v green">94%</span></div>
+                <div class="ss-row"><span>Capacità</span><span class="v">4823 mAh</span></div>
+                <div class="ss-row"><span>Voltaggio</span><span class="v cyan">12.34 V</span></div>
+                <div class="ss-row"><span>Temperatura</span><span class="v">32.1°C</span></div>
+                <div class="ss-row"><span>Alimentatore</span><span class="v green">Apple 96W</span></div>
+                <div class="ss-chart">
+                  <svg viewBox="0 0 200 32" preserveAspectRatio="none">
+                    <path d="M 0 24 L 20 22 L 40 23 L 60 20 L 80 18 L 100 16 L 120 14 L 140 12 L 160 10 L 180 9 L 200 8" stroke="#30d158" stroke-width="1.2" fill="none"/>
+                    <path d="M 0 24 L 20 22 L 40 23 L 60 20 L 80 18 L 100 16 L 120 14 L 140 12 L 160 10 L 180 9 L 200 8 L 200 32 L 0 32 Z" fill="rgba(48,209,88,0.15)"/>
+                  </svg>
+                </div>
+              </div>
             </div>
-            <div class="card">
-                <div class="card-icon">🔄</div>
-                <h3 data-i18n="f2.t">Cycle counting &amp; forecast</h3>
-                <p data-i18n="f2.d">Linear-regression forecast tells you when health will hit 80% and how many cycles you have left.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon">📱</div>
-                <h3 data-i18n="f3.t">iPhone &amp; iPad support</h3>
-                <p data-i18n="f3.d">Full battery details over USB or Wi-Fi via libimobiledevice. Cycle count, capacity, temperature, voltage.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon">⚡</div>
-                <h3 data-i18n="f4.t">Power adapter classifier</h3>
-                <p data-i18n="f4.d">Identifies Apple original vs MFi-certified vs generic chargers from the FamilyCode IORegistry value.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon">📈</div>
-                <h3 data-i18n="f5.t">History &amp; charts</h3>
-                <p data-i18n="f5.d">SQLite-backed history with overlapping charts across all your devices. Export to CSV.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon">🔔</div>
-                <h3 data-i18n="f6.t">Smart notifications</h3>
-                <p data-i18n="f6.d">Anomaly detection: alerts you if health drops faster than normal. Plus low battery, hot battery, calibration reminders.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon">🌐</div>
-                <h3 data-i18n="f7.t">Localized</h3>
-                <p data-i18n="f7.d">Italian, English, French, German, Spanish out of the box. More languages welcome via PR.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon">🔒</div>
-                <h3 data-i18n="f8.t">Privacy first</h3>
-                <p data-i18n="f8.d">No analytics, no network calls, no account.</p>
-            </div>
+          </div>
+          <div class="ss-caption" data-i18n="preview.cap1">Mac · cicli, salute raw FCC, wattaggio in tempo reale, qualità alimentatore, grafico storico.</div>
         </div>
-    </section>
 
-    <section id="download" class="download">
-        <h2 data-i18n="download.title">Download</h2>
-        <p data-i18n="download.sub">Pre-built universal binary on GitHub Releases.</p>
-        <a class="btn primary" href="https://github.com/Gianmarco0001/Doctor-Battery/releases/latest" target="_blank" rel="noopener" data-i18n="download.cta">Latest release</a>
-        <div class="install-note">
-            <h3 data-i18n="install.first">First launch</h3>
-            <p data-i18n="install.first.body">The app is signed ad-hoc, so Gatekeeper warns on first launch. Right-click the <code>.app</code> → <strong>Open</strong> → confirm. macOS remembers the choice.</p>
-            <h3 data-i18n="install.ios">iOS / iPad support</h3>
-            <p data-i18n="install.ios.body">Install <a href="https://libimobiledevice.org" target="_blank" rel="noopener">libimobiledevice</a>:</p>
-            <pre><code>brew install libimobiledevice usbmuxd</code></pre>
-            <p data-i18n="install.ios.body2">Connect the device, unlock it, accept "Trust this Mac". Wi-Fi works after a one-time USB pairing.</p>
+        <!-- Card 2: iPhone & iPad -->
+        <div class="screenshot-card featured">
+          <div class="ss-window">
+            <div class="ss-titlebar"><i></i><i></i><i></i></div>
+            <div class="ss-content">
+              <div class="ss-sidebar">
+                <div class="ss-side-row"><span class="ss-side-dot"></span>Mac</div>
+                <div class="ss-side-row active"><span class="ss-side-dot"></span>iPhone</div>
+                <div class="ss-side-row"><span class="ss-side-dot"></span>iPad</div>
+              </div>
+              <div class="ss-main">
+                <div class="ss-row"><span>Modello</span><span class="v">iPhone 15 Pro</span></div>
+                <div class="ss-row"><span>Cicli</span><span class="v green">412</span></div>
+                <div class="ss-row"><span>Salute</span><span class="v green">89%</span></div>
+                <div class="ss-row"><span>Capacità design</span><span class="v">3274 mAh</span></div>
+                <div class="ss-row"><span>Capacità reale</span><span class="v cyan">2914 mAh</span></div>
+                <div class="ss-row"><span>Connessione</span><span class="v cyan">Wi-Fi</span></div>
+                <div class="ss-chart">
+                  <svg viewBox="0 0 200 32" preserveAspectRatio="none">
+                    <path d="M 0 26 L 20 23 L 40 22 L 60 19 L 80 17 L 100 14 L 120 12 L 140 11 L 160 9 L 180 8 L 200 7" stroke="#00d4ff" stroke-width="1.2" fill="none"/>
+                    <path d="M 0 26 L 20 23 L 40 22 L 60 19 L 80 17 L 100 14 L 120 12 L 140 11 L 160 9 L 180 8 L 200 7 L 200 32 L 0 32 Z" fill="rgba(0,212,255,0.15)"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ss-caption" data-i18n="preview.cap2">iPhone e iPad · via USB o Wi-Fi con libimobiledevice.</div>
         </div>
-    </section>
 
-    <section class="build">
-        <h2 data-i18n="build.title">Build from source</h2>
-<pre><code>git clone https://github.com/Gianmarco0001/Doctor-Battery.git
-cd Doctor-Battery
-./build.sh
-open build/DoctorBattery.app</code></pre>
-        <p data-i18n="build.note">Pure Swift + SwiftUI + Swift Charts. No third-party dependencies. ~1300 LOC.</p>
-    </section>
+        <!-- Card 3: Settings -->
+        <div class="screenshot-card">
+          <div class="ss-window">
+            <div class="ss-titlebar"><i></i><i></i><i></i></div>
+            <div class="ss-content">
+              <div class="ss-sidebar">
+                <div class="ss-side-row active"><span class="ss-side-dot"></span>Mac</div>
+                <div class="ss-side-row"><span class="ss-side-dot"></span>iPhone</div>
+                <div class="ss-side-row"><span class="ss-side-dot"></span>iPad</div>
+              </div>
+              <div class="ss-main">
+                <div class="ss-row"><span>Cicli</span><span class="v">287</span></div>
+                <div class="ss-row"><span>Salute</span><span class="v">94%</span></div>
+                <div class="ss-row"><span>Capacità</span><span class="v">4823 mAh</span></div>
+                <div class="ss-row"><span>Voltaggio</span><span class="v">12.34 V</span></div>
+              </div>
+            </div>
+            <!-- Sheet overlay -->
+            <div class="ss-sheet">
+              <div class="ss-sheet-title">Impostazioni</div>
+              <div class="ss-sheet-row"><span>Avvio al login</span><span class="ss-toggle"></span></div>
+              <div class="ss-sheet-row"><span>Notifiche anomalie</span><span class="ss-toggle"></span></div>
+              <div class="ss-sheet-row"><span>Lingua</span><span style="color: var(--text); font-family: 'JetBrains Mono', monospace;">Italiano</span></div>
+              <div class="ss-sheet-row"><span>Intervallo log</span><span style="color: var(--text); font-family: 'JetBrains Mono', monospace;">5 min</span></div>
+              <div class="ss-sheet-row"><span>Soglia avviso</span><span style="color: var(--accent-warn); font-family: 'JetBrains Mono', monospace;">80%</span></div>
+            </div>
+          </div>
+          <div class="ss-caption" data-i18n="preview.cap3">Impostazioni · avvio al login, intervallo log, lingua, soglie.</div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    <footer>
-        <p>
-            <span data-i18n="footer.lic">MIT License · </span>
-            <a href="https://github.com/Gianmarco0001/Doctor-Battery" target="_blank" rel="noopener" data-i18n="footer.src">Source on GitHub</a>
-        </p>
-        <p class="small" data-i18n="footer.small">Built on libimobiledevice (LGPL). Not affiliated with Apple Inc.</p>
-    </footer>
+  <!-- STICKY SHOWCASE -->
+  <section class="showcase" id="showcase">
+    <div class="showcase-pin">
+      <div class="showcase-progress"><div class="showcase-progress-fill" id="progFill"></div></div>
+      <div class="showcase-dots" id="progDots">
+        <div class="showcase-dot active"></div>
+        <div class="showcase-dot"></div>
+        <div class="showcase-dot"></div>
+      </div>
+
+      <div class="showcase-text">
+        <div class="showcase-step active" data-step="0">
+          <div class="showcase-text-eyebrow">01 — Numeri reali</div>
+          <h2 class="showcase-text-title">Lo stesso numero<br/>che vede il tuo Mac.</h2>
+          <p class="showcase-text-body">Leggiamo direttamente il chip gas-gauge — lo stesso valore FCC che il sistema usa internamente. Niente marketing, niente arrotondamenti, niente stime addolcite. Solo verità grezza, esposta in chiaro.</p>
+        </div>
+        <div class="showcase-step" data-step="1">
+          <div class="showcase-text-eyebrow">02 — Previsione</div>
+          <h2 class="showcase-text-title">Sappi quando<br/>prima del tempo.</h2>
+          <p class="showcase-text-body">La regressione lineare sull'intero storico proietta esattamente quando la batteria scenderà all'80% — e quanti cicli ti restano prima dell'assistenza.</p>
+        </div>
+        <div class="showcase-step" data-step="2">
+          <div class="showcase-text-eyebrow">03 — Ogni dispositivo</div>
+          <h2 class="showcase-text-title">Mac, iPhone, iPad.<br/>Una sola finestra.</h2>
+          <p class="showcase-text-body">Accoppia una volta via USB, monitora per sempre via Wi-Fi. Cicli, capacità, temperatura e voltaggio per tutta la famiglia — senza mai alzarti dalla scrivania.</p>
+        </div>
+      </div>
+
+      <div class="showcase-visual">
+        <div class="showcase-vis-step active" data-step="0">
+          <div class="big-battery">
+            <div class="battery-shell">
+              <div class="battery-fill" id="bigBatteryFill" style="width: 0%;"></div>
+              <div class="battery-label"><span data-counter-show data-target="94">0</span>%</div>
+            </div>
+            <div class="battery-tip"></div>
+          </div>
+        </div>
+        <div class="showcase-vis-step" data-step="1">
+          <svg class="forecast-svg" viewBox="0 0 380 260">
+            <defs>
+              <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#30d158" stop-opacity="0.35"/>
+                <stop offset="100%" stop-color="#30d158" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <g class="forecast-grid">
+              <line x1="0" y1="60" x2="380" y2="60"/>
+              <line x1="0" y1="120" x2="380" y2="120"/>
+              <line x1="0" y1="180" x2="380" y2="180"/>
+            </g>
+            <text x="0" y="56" fill="#6e6e73" font-size="10" font-family="JetBrains Mono">100%</text>
+            <text x="0" y="116" fill="#6e6e73" font-size="10" font-family="JetBrains Mono">90%</text>
+            <text x="0" y="176" fill="#6e6e73" font-size="10" font-family="JetBrains Mono">80%</text>
+            <path class="forecast-area" id="forecastArea" d="M 30 30 L 110 50 L 190 70 L 250 95 L 310 130 L 360 170 L 360 220 L 30 220 Z"/>
+            <path class="forecast-line" id="forecastLine" d="M 30 30 L 110 50 L 190 70 L 250 95 L 310 130 L 360 170"/>
+            <circle class="forecast-dot" cx="30" cy="30" r="4"/>
+            <circle class="forecast-dot" cx="110" cy="50" r="4"/>
+            <circle class="forecast-dot" cx="190" cy="70" r="4"/>
+            <circle class="forecast-dot" cx="250" cy="95" r="4"/>
+            <circle class="forecast-dot" cx="310" cy="130" r="4"/>
+            <circle class="forecast-dot" cx="360" cy="170" r="4" style="fill: var(--accent-warn);"/>
+            <text id="forecastNoteText" x="270" y="200" fill="#ff9f0a" font-size="11" font-family="JetBrains Mono">80% in ~14 mesi</text>
+          </svg>
+        </div>
+        <div class="showcase-vis-step" data-step="2">
+          <div class="ring-wrap">
+            <svg class="big-ring" viewBox="0 0 320 320">
+              <circle class="big-ring-track" cx="160" cy="160" r="130" stroke-width="14" fill="none"/>
+              <circle class="big-ring-prog cyan" cx="160" cy="160" r="130" stroke-width="14" fill="none"
+                stroke-dasharray="817" stroke-dashoffset="817" transform="rotate(-90 160 160)" id="bigRingCyan"/>
+              <circle class="big-ring-prog" cx="160" cy="160" r="105" stroke-width="14" fill="none"
+                stroke-dasharray="660" stroke-dashoffset="660" transform="rotate(-90 160 160)" id="bigRingGreen"/>
+            </svg>
+            <div class="ring-center">
+              <div class="ring-pct"><span data-counter-show data-target="94">0</span>%</div>
+              <div class="ring-pct-label" id="liveDevicesLabel">3 dispositivi · live</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="container">
+      <div class="section-eyebrow reveal" data-i18n="feat.eyebrow">/* funzioni */</div>
+      <h2 class="section-title reveal" data-i18n-html="feat.title">Tutto quello che serve sapere<br/>sulle tue batterie.</h2>
+      <p class="section-sub reveal" data-i18n="feat.sub">Otto moduli, una sola app, zero analytics. La diagnostica che dovrebbe essere — informazione pura.</p>
+
+      <div class="features-grid">
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/>
+            </svg>
+          </div>
+          <h3 class="feature-title" data-i18n="feat.f1t">Salute raw FCC</h3>
+          <p class="feature-body" data-i18n="feat.f1b">Legge direttamente il chip gas-gauge. Stessi numeri usati internamente dal sistema — esposti in modo trasparente.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon cyan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <h3 class="feature-title" data-i18n="feat.f2t">Cicli e previsione</h3>
+          <p class="feature-body" data-i18n="feat.f2b">La regressione lineare ti dice quando la salute scenderà all'80% e quanti cicli ti restano.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/>
+            </svg>
+          </div>
+          <h3 class="feature-title" data-i18n="feat.f3t">Supporto iPhone e iPad</h3>
+          <p class="feature-body" data-i18n="feat.f3b">Dettagli completi via USB o Wi-Fi tramite libimobiledevice. Cicli, capacità, temperatura, voltaggio.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon warn">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+          </div>
+          <h3 class="feature-title" data-i18n="feat.f4t">Classificatore alimentatori</h3>
+          <p class="feature-body" data-i18n="feat.f4b">Identifica caricatori originali, MFi-certificati o generici dal valore FamilyCode in IORegistry.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon cyan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>
+              <path d="M8 13l2 2 4-4"/>
+            </svg>
+          </div>
+          <h3 class="feature-title" data-i18n="feat.f5t">Storico e grafici</h3>
+          <p class="feature-body" data-i18n="feat.f5b">Storico SQLite con grafici sovrapposti per tutti i dispositivi. Esportazione CSV.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon red">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+            </svg>
+          </div>
+          <h3 class="feature-title" data-i18n="feat.f6t">Notifiche intelligenti</h3>
+          <p class="feature-body" data-i18n="feat.f6b">Anomalie rilevate: avviso se la salute cala più del normale. Plus batteria scarica, surriscaldata, promemoria calibrazione.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+              <path d="M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10z"/>
+            </svg>
+          </div>
+          <h3 class="feature-title" data-i18n="feat.f7t">Localizzata</h3>
+          <p class="feature-body" data-i18n="feat.f7b">Italiano e inglese di serie. Altre lingue benvenute via PR.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon cyan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <h3 class="feature-title" data-i18n="feat.f8t">Privacy first</h3>
+          <p class="feature-body" data-i18n="feat.f8b">Nessuna analytics, nessuna chiamata di rete, nessun account. Dati in ~/Library/Application Support/BatteryMonitor.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon warn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </div>
+          <h3 class="feature-title" data-i18n="feat.f9t">Letture in tempo reale</h3>
+          <p class="feature-body" data-i18n="feat.f9b">Aggiornamento ogni secondo finché il dispositivo è connesso. Vedi voltaggio e temperatura rispondere al carico.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD -->
+  <section id="download">
+    <div class="container">
+      <div class="section-eyebrow reveal" data-i18n="dl.eyebrow">/* download */</div>
+      <h2 class="section-title reveal" data-i18n="dl.title">Un click e sei a posto.</h2>
+      <p class="section-sub reveal" data-i18n="dl.sub">Universal binary pre-compilato su GitHub Releases.</p>
+
+      <div class="download-wrap">
+        <a class="btn btn-primary download-btn" href="#" data-magnet>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/>
+          </svg>
+          <span data-i18n="dl.btn">Ultima release · v1.4.0</span>
+        </a>
+        <div class="download-meta" data-i18n="dl.meta">macOS 13+ · ~6.4 MB · SHA256 verificato</div>
+      </div>
+
+      <div class="install-grid">
+        <div class="install-card">
+          <div class="install-title">
+            <span class="install-title-num">1</span>
+            <span data-i18n="dl.i1t">Primo avvio</span>
+          </div>
+          <p class="install-body" data-i18n="dl.i1b">L'app è firmata ad-hoc, quindi Gatekeeper avvisa al primo avvio. Click destro sull'.app → Apri → conferma. macOS ricorderà la scelta.</p>
+        </div>
+        <div class="install-card">
+          <div class="install-title">
+            <span class="install-title-num">2</span>
+            <span data-i18n="dl.i2t">Supporto iOS / iPadOS</span>
+          </div>
+          <p class="install-body" data-i18n="dl.i2b">Installa libimobiledevice, poi connetti e autorizza il dispositivo.</p>
+          <div class="terminal">
+            <span class="terminal-prompt">$</span><span>brew install libimobiledevice usbmuxd</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BUILD -->
+  <section class="build-section" id="build">
+    <div class="container">
+      <div class="section-eyebrow reveal" data-i18n="build.eyebrow">/* build */</div>
+      <h2 class="section-title reveal" data-i18n="build.title">Compila dal sorgente.</h2>
+      <p class="section-sub reveal" data-i18n="build.sub">Pure Swift + SwiftUI + Swift Charts. Nessuna dipendenza esterna. ~1300 LOC.</p>
+
+      <div class="build-terminal reveal">
+        <div class="term-header">
+          <div class="term-dot r"></div>
+          <div class="term-dot y"></div>
+          <div class="term-dot g"></div>
+          <div class="term-title">~/Developer/Doctor-Battery — zsh</div>
+        </div>
+        <div class="term-body" id="termBody">
+          <span class="term-line"><span class="prompt">$</span> <span class="cmd">git clone https://example.com/doctor-battery.git</span></span>
+          <span class="term-line"><span class="out">Cloning into 'doctor-battery'...</span></span>
+          <span class="term-line"><span class="out">remote: Counting objects: 1284, done.</span></span>
+          <span class="term-line"><span class="prompt">$</span> <span class="cmd">cd doctor-battery &amp;&amp; ./build.sh</span></span>
+          <span class="term-line"><span class="out">Compiling Swift sources... ✓</span></span>
+          <span class="term-line"><span class="out">Linking app bundle........... ✓</span></span>
+          <span class="term-line"><span class="out">Code-signing (ad-hoc)........ ✓</span></span>
+          <span class="term-line"><span class="prompt">$</span> <span class="cmd">open build/DoctorBattery.app</span><span class="terminal-caret"></span></span>
+        </div>
+      </div>
+      <div class="build-meta" data-i18n="build.meta">Licenza MIT · Fatto con cura per le batterie di tutti.</div>
+    </div>
+  </section>
+
+  <footer data-i18n="footer">
+    Non affiliato a nessun produttore di dispositivi · Licenza MIT · Costruito con ♥ per la trasparenza.
+  </footer>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="tweaks.jsx"></script>
+
+<script src="i18n.js"></script>
+<script src="animations.js"></script>
 </body>
 </html>
