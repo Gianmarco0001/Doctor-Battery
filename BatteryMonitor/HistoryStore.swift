@@ -190,6 +190,6 @@ final class HistoryStore {
 
     private func supportDir() -> URL? {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("BatteryMonitor", isDirectory: true)
+            .appendingPathComponent("DoctorBattery", isDirectory: true)
     }
 }

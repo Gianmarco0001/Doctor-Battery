@@ -3,10 +3,17 @@ set -e
 cd "$(dirname "$0")"
 
 SRC="${1:-icon-source.png}"
+STYLED="icon-styled.png"
 OUT="BatteryMonitor/Resources/AppIcon.icns"
 
 if [ ! -f "$SRC" ]; then
     echo "Source PNG not found: $SRC"; exit 1
+fi
+
+if [ -f make-fancy-icon.swift ]; then
+    echo "Generating styled icon..."
+    swift make-fancy-icon.swift "$SRC" "$STYLED" >/dev/null
+    SRC="$STYLED"
 fi
 
 ICONSET="build/AppIcon.iconset"

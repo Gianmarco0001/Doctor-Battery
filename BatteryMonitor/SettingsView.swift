@@ -10,6 +10,7 @@ enum SettingsKeys {
     static let calibrationNotify = "calibrationNotify"
     static let launchAtLogin = "launchAtLogin"
     static let showInMenuBar = "showInMenuBar"
+    static let preferredLanguage = "preferredLanguage"
 }
 
 final class SettingsModel: ObservableObject {
@@ -96,6 +97,18 @@ struct SettingsView: View {
                             .labelsHidden()
                     }
                 }
+                Picker(NSLocalizedString("Lingua", comment: ""), selection: Binding(
+                    get: { (UserDefaults.standard.array(forKey: "AppleLanguages") as? [String])?.first ?? Locale.current.identifier },
+                    set: { newLang in
+                        UserDefaults.standard.set([newLang], forKey: "AppleLanguages")
+                        UserDefaults.standard.synchronize()
+                        showRestartAlert()
+                    }
+                )) {
+                    Text("Sistema").tag("")
+                    Text("Italiano").tag("it")
+                    Text("English").tag("en")
+                }
             }
             Section {
                 Text(LocalizedStringKey("Note privacy: tutti i dati restano in locale, nessuna telemetria."))
@@ -104,6 +117,26 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func showRestartAlert() {
+        let alert = NSAlert()
+        alert.messageText = NSLocalizedString("Riavvio richiesto", comment: "")
+        alert.informativeText = NSLocalizedString("Il cambio lingua richiede il riavvio dell'app.", comment: "")
+        alert.addButton(withTitle: NSLocalizedString("Riavvia", comment: ""))
+        alert.addButton(withTitle: NSLocalizedString("Più tardi", comment: ""))
+        if alert.runModal() == .alertFirstButtonReturn {
+            relaunchApp()
+        }
+    }
+
+    private func relaunchApp() {
+        let url = Bundle.main.bundleURL
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        task.arguments = ["-n", url.path]
+        try? task.run()
+        NSApp.terminate(nil)
     }
 
     private var notificationsTab: some View {

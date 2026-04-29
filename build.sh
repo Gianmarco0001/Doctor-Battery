@@ -2,7 +2,7 @@
 set -e
 cd "$(dirname "$0")"
 
-APP_NAME="BatteryMonitor"
+APP_NAME="DoctorBattery"
 BUILD_DIR="./build"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
@@ -56,13 +56,13 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>           <string>BatteryMonitor</string>
-    <key>CFBundleDisplayName</key>    <string>Battery Monitor</string>
-    <key>CFBundleIdentifier</key>     <string>com.batterymonitor.app</string>
+    <key>CFBundleName</key>           <string>DoctorBattery</string>
+    <key>CFBundleDisplayName</key>    <string>Doctor Battery</string>
+    <key>CFBundleIdentifier</key>     <string>com.doctorbattery.app</string>
     <key>CFBundleVersion</key>        <string>1</string>
     <key>CFBundleShortVersionString</key><string>1.0</string>
     <key>CFBundlePackageType</key>    <string>APPL</string>
-    <key>CFBundleExecutable</key>     <string>BatteryMonitor</string>
+    <key>CFBundleExecutable</key>     <string>DoctorBattery</string>
     <key>CFBundleIconFile</key>       <string>AppIcon</string>
     <key>CFBundleDevelopmentRegion</key><string>it</string>
     <key>CFBundleLocalizations</key>

@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 @main
-struct BatteryMonitorApp: App {
+struct DoctorBatteryApp: App {
     @StateObject private var vm = AppViewModel()
     @StateObject private var settings = SettingsModel.shared
 
@@ -11,13 +11,13 @@ struct BatteryMonitorApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("Battery Monitor") {
+        WindowGroup("Doctor Battery") {
             ContentView(vm: vm)
                 .frame(minWidth: 820, minHeight: 640)
         }
         .commands {
             CommandGroup(replacing: .appInfo) {
-                Button("About Battery Monitor") {
+                Button(LocalizedStringKey("Informazioni su Doctor Battery")) {
                     showAbout()
                 }
             }
@@ -37,11 +37,11 @@ struct BatteryMonitorApp: App {
 
     private func showAbout() {
         let opts: [NSApplication.AboutPanelOptionKey: Any] = [
-            .applicationName: "Battery Monitor",
+            .applicationName: "Doctor Battery",
             .applicationVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
             .version: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1",
             .credits: NSAttributedString(
-                string: "Open source battery diagnostics for Mac and iOS / iPadOS devices.\n\nAll data stays local — no telemetry.\n\nUses libimobiledevice (LGPL) for iOS device communication.",
+                string: "Open source battery diagnostics for Mac, iOS and iPadOS.\n\nAll data stays local — no telemetry.\n\nUses libimobiledevice (LGPL).",
                 attributes: [.font: NSFont.systemFont(ofSize: 11)]
             )
         ]

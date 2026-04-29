@@ -1,4 +1,4 @@
-# Battery Monitor
+# Doctor Battery
 
 Open-source battery diagnostics for **macOS**, **iOS** and **iPadOS** — free alternative to commercial battery monitoring tools.
 
@@ -27,7 +27,7 @@ Requirements: macOS 13+, command-line tools (Swift toolchain).
 git clone https://github.com/Gianmarco0001/Doctor-Battery.git
 cd Doctor-Battery
 ./build.sh
-open build/BatteryMonitor.app
+open build/DoctorBattery.app
 ```
 
 Build options:
@@ -75,7 +75,7 @@ Pure Swift + SwiftUI + Swift Charts. No third-party dependencies. ~1300 lines of
 
 ## Privacy
 
-- All data is stored at `~/Library/Application Support/BatteryMonitor/history.sqlite`.
+- All data is stored at `~/Library/Application Support/DoctorBattery/history.sqlite`.
 - No network requests. No analytics. No crash reporting.
 
 ## License

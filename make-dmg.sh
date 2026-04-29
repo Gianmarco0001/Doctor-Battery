@@ -2,9 +2,9 @@
 set -e
 cd "$(dirname "$0")"
 
-APP="build/BatteryMonitor.app"
-DMG="build/BatteryMonitor.dmg"
-VOL="Battery Monitor"
+APP="build/DoctorBattery.app"
+DMG="build/DoctorBattery.dmg"
+VOL="Doctor Battery"
 
 if [ ! -d "$APP" ]; then
     echo "Build first: ./build.sh"; exit 1

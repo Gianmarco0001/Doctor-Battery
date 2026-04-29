@@ -102,3 +102,15 @@
 "Non raggiungibile in rete (schermo spento o usbmuxd offline)" = "Not reachable on the network (screen off or usbmuxd offline)";
 "Trust non autorizzato — accetta il prompt sul dispositivo" = "Trust not granted — accept the prompt on the device";
 "Lettura non riuscita" = "Read failed";
+"Lingua" = "Language";
+"Sistema" = "System";
+"Italiano" = "Italiano";
+"English" = "English";
+"Riavvio richiesto" = "Restart required";
+"Il cambio lingua richiede il riavvio dell'app." = "Switching language requires the app to restart.";
+"Riavvia" = "Restart";
+"Più tardi" = "Later";
+"Aggiorna" = "Refresh";
+"Carica nel tempo" = "Charge over time";
+"Informazioni su Doctor Battery" = "About Doctor Battery";
+"Doctor Battery" = "Doctor Battery";
