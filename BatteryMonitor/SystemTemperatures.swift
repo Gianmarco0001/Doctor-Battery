@@ -39,19 +39,46 @@ struct SystemTemperatureSummary {
 }
 
 enum SystemTemperatures {
-    static func read() -> SystemTemperatureSummary {
-        guard let clientRef = IOHIDEventSystemClientCreate(kCFAllocatorDefault) else {
-            return SystemTemperatureSummary(all: [], cpuAvg: nil, cpuMax: nil, gpuAvg: nil, gpuMax: nil, socMax: nil, nandMax: nil)
-        }
-        let client = clientRef.takeRetainedValue()
+    private static let lock = NSLock()
+    private static var cachedClient: AnyObject?
+
+    private static func sharedClient() -> AnyObject? {
+        lock.lock()
+        defer { lock.unlock() }
+        if let c = cachedClient { return c }
+        guard let ref = IOHIDEventSystemClientCreate(kCFAllocatorDefault) else { return nil }
+        let client = ref.takeRetainedValue()
         let matching: CFDictionary = [
             "PrimaryUsagePage": kHIDPage_AppleVendor,
             "PrimaryUsage": kHIDUsage_AppleVendor_TemperatureSensor
         ] as CFDictionary
         _ = IOHIDEventSystemClientSetMatching(client, matching)
-        guard let servicesRef = IOHIDEventSystemClientCopyServices(client) else {
-            return SystemTemperatureSummary(all: [], cpuAvg: nil, cpuMax: nil, gpuAvg: nil, gpuMax: nil, socMax: nil, nandMax: nil)
-        }
+        cachedClient = client
+        return client
+    }
+
+    static func summarize(samples: [[SystemTemperatureReading]]) -> SystemTemperatureSummary {
+        let last = samples.last ?? []
+        let flat = samples.flatMap { $0 }
+        let cpu = flat.filter { isCPU($0.name) }.map(\.value)
+        let gpu = flat.filter { isGPU($0.name) }.map(\.value)
+        let soc = flat.filter { isSoC($0.name) }.map(\.value)
+        let nand = flat.filter { isNAND($0.name) }.map(\.value)
+        func avg(_ v: [Double]) -> Double? { v.isEmpty ? nil : v.reduce(0, +) / Double(v.count) }
+        return SystemTemperatureSummary(
+            all: last,
+            cpuAvg: avg(cpu),
+            cpuMax: cpu.max(),
+            gpuAvg: avg(gpu),
+            gpuMax: gpu.max(),
+            socMax: soc.max(),
+            nandMax: nand.max()
+        )
+    }
+
+    static func read() -> [SystemTemperatureReading] {
+        guard let client = sharedClient() else { return [] }
+        guard let servicesRef = IOHIDEventSystemClientCopyServices(client) else { return [] }
         let services = servicesRef.takeRetainedValue() as Array
 
         var readings: [SystemTemperatureReading] = []
@@ -66,19 +93,7 @@ enum SystemTemperatures {
                 readings.append(SystemTemperatureReading(name: name, value: value))
             }
         }
-
-        let cpuVals = readings.filter { isCPU($0.name) }.map(\.value)
-        let gpuVals = readings.filter { isGPU($0.name) }.map(\.value)
-        let socVals = readings.filter { isSoC($0.name) }.map(\.value)
-        let nandVals = readings.filter { isNAND($0.name) }.map(\.value)
-        return SystemTemperatureSummary(
-            all: readings,
-            cpuAvg: cpuVals.isEmpty ? nil : cpuVals.reduce(0, +) / Double(cpuVals.count),
-            cpuMax: cpuVals.max(),
-            gpuAvg: gpuVals.isEmpty ? nil : gpuVals.reduce(0, +) / Double(gpuVals.count),
-            gpuMax: gpuVals.max(),
-            socMax: socVals.max(),
-            nandMax: nandVals.max())
+        return readings
     }
 
     private static func isCPU(_ s: String) -> Bool {

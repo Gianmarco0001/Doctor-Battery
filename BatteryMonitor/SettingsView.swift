@@ -293,7 +293,9 @@ struct SettingsView: View {
         task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         task.arguments = ["-n", url.path]
         try? task.run()
-        NSApp.terminate(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            NSApp.terminate(nil)
+        }
     }
 
     private var versionString: String {

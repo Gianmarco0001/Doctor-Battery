@@ -1,12 +1,13 @@
 import Foundation
-import UserNotifications
+@preconcurrency import UserNotifications
 
+@MainActor
 final class Notifier {
     static let shared = Notifier()
     private var lastFiredKey: [String: Date] = [:]
     private let cooldown: TimeInterval = 30 * 60
 
-    func requestAuthIfNeeded() {
+    nonisolated func requestAuthIfNeeded() {
         let center = UNUserNotificationCenter.current()
         center.getNotificationSettings { s in
             if s.authorizationStatus == .notDetermined {

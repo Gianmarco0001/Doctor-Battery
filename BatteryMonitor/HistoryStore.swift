@@ -1,7 +1,7 @@
 import Foundation
 import SQLite3
 
-private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+private let SQLITE_TRANSIENT = unsafeBitCast(OpaquePointer(bitPattern: -1)!, to: sqlite3_destructor_type.self)
 
 struct HistoryPoint {
     let timestamp: Date
@@ -52,6 +52,19 @@ final class HistoryStore {
     }
 
     func dbPath() -> String? { supportDir()?.appendingPathComponent("history.sqlite").path }
+
+    func prune(retentionDays: Int = 730) {
+        queue.async {
+            guard let db = self.db else { return }
+            let cutoff = Date().addingTimeInterval(-Double(retentionDays) * 86400).timeIntervalSince1970
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, "DELETE FROM snapshots WHERE ts < ?;", -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_double(stmt, 1, cutoff)
+                sqlite3_step(stmt)
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
 
     func recordMac(_ s: BatterySnapshot) {
         record(deviceId: "mac",

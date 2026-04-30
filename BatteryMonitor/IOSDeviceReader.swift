@@ -65,18 +65,29 @@ enum IOSDeviceReader {
         return .missing
     }
 
+    static func isValidUDID(_ s: String) -> Bool {
+        guard !s.isEmpty, s.count <= 64, s.first != "-" else { return false }
+        for ch in s.unicodeScalars {
+            let isHex = (ch.value >= 0x30 && ch.value <= 0x39)
+                || (ch.value >= 0x41 && ch.value <= 0x46)
+                || (ch.value >= 0x61 && ch.value <= 0x66)
+            if !isHex && ch != "-" { return false }
+        }
+        return true
+    }
+
     static func listDevices() -> [IOSDevice] {
         guard case .ok(let bin) = toolchain() else { return [] }
         var devices: [IOSDevice] = []
         for line in run("\(bin)/idevice_id", ["-l"]).stdout.components(separatedBy: .newlines) {
             let udid = line.trimmingCharacters(in: .whitespaces)
-            if !udid.isEmpty {
+            if isValidUDID(udid) {
                 devices.append(info(udid: udid, connection: .usb, bin: bin))
             }
         }
         for line in run("\(bin)/idevice_id", ["-n"]).stdout.components(separatedBy: .newlines) {
             let udid = line.trimmingCharacters(in: .whitespaces)
-            if !udid.isEmpty, !devices.contains(where: { $0.udid == udid }) {
+            if isValidUDID(udid), !devices.contains(where: { $0.udid == udid }) {
                 devices.append(info(udid: udid, connection: .network, bin: bin))
             }
         }
@@ -190,28 +201,36 @@ enum IOSDeviceReader {
         return printable ? trimmed : nil
     }
 
-    private static func extractBatteryEntry(_ dict: [String: Any]) -> [String: Any] {
-        let interesting = ["CycleCount", "DesignCapacity", "NominalChargeCapacity",
-                           "AppleRawMaxCapacity", "MaxCapacity",
-                           "AppleRawCurrentCapacity", "AbsoluteCapacity",
-                           "Voltage", "Temperature", "BatterySerialNumber"]
-        if interesting.contains(where: { dict[$0] != nil }) { return dict }
+    private static let batterySpecificKeys: Set<String> = [
+        "AppleRawMaxCapacity", "AppleRawCurrentCapacity",
+        "BatterySerialNumber", "NominalChargeCapacity"
+    ]
+    private static let batteryGenericKeys: Set<String> = [
+        "CycleCount", "DesignCapacity", "MaxCapacity",
+        "AbsoluteCapacity", "Voltage", "Temperature"
+    ]
+    private static let maxPlistDepth = 32
+
+    private static func extractBatteryEntry(_ dict: [String: Any], depth: Int = 0) -> [String: Any] {
+        if depth > maxPlistDepth { return [:] }
+        if !batterySpecificKeys.isDisjoint(with: dict.keys) { return dict }
         if let r = dict["IORegistry"] as? [String: Any] {
-            let inner = extractBatteryEntry(r)
+            let inner = extractBatteryEntry(r, depth: depth + 1)
             if !inner.isEmpty { return inner }
         }
         if let children = dict["IORegistryEntryChildren"] as? [[String: Any]] {
             for c in children {
-                let r = extractBatteryEntry(c)
+                let r = extractBatteryEntry(c, depth: depth + 1)
                 if !r.isEmpty { return r }
             }
         }
         if let arr = dict["children"] as? [[String: Any]] {
             for c in arr {
-                let r = extractBatteryEntry(c)
+                let r = extractBatteryEntry(c, depth: depth + 1)
                 if !r.isEmpty { return r }
             }
         }
+        if !batteryGenericKeys.isDisjoint(with: dict.keys) { return dict }
         return [:]
     }
 
@@ -263,35 +282,22 @@ enum IOSDeviceReader {
         p.standardOutput = outPipe
         p.standardError = errPipe
 
-        var outData = Data()
-        var errData = Data()
-        let outQueue = DispatchQueue(label: "proc.out")
-        let errQueue = DispatchQueue(label: "proc.err")
-        outPipe.fileHandleForReading.readabilityHandler = { h in
-            let d = h.availableData
-            if !d.isEmpty { outQueue.sync { outData.append(d) } }
-        }
-        errPipe.fileHandleForReading.readabilityHandler = { h in
-            let d = h.availableData
-            if !d.isEmpty { errQueue.sync { errData.append(d) } }
-        }
-
         do { try p.run() } catch {
-            outPipe.fileHandleForReading.readabilityHandler = nil
-            errPipe.fileHandleForReading.readabilityHandler = nil
             return ("", "spawn error: \(error)")
         }
 
-        let deadline = Date().addingTimeInterval(timeout)
-        while p.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
-        if p.isRunning { p.terminate() }
+        let timeoutItem = DispatchWorkItem {
+            if p.isRunning { p.terminate() }
+        }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: timeoutItem)
+
+        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
+        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
+        timeoutItem.cancel()
 
-        outPipe.fileHandleForReading.readabilityHandler = nil
-        errPipe.fileHandleForReading.readabilityHandler = nil
-
-        let out = outQueue.sync { String(data: outData, encoding: .utf8) ?? "" }
-        let err = errQueue.sync { String(data: errData, encoding: .utf8) ?? "" }
+        let out = String(data: outData, encoding: .utf8) ?? ""
+        let err = String(data: errData, encoding: .utf8) ?? ""
         return (out, err)
     }
 
@@ -307,8 +313,11 @@ enum IOSDeviceReader {
         return out
     }
 
+    private static let maxPlistBytes = 8 * 1024 * 1024
+
     private static func parsePlistXML(_ s: String) -> [String: Any]? {
         guard let data = s.data(using: .utf8), !data.isEmpty else { return nil }
+        guard data.count <= maxPlistBytes else { return nil }
         let obj = try? PropertyListSerialization.propertyList(from: data, format: nil)
         return obj as? [String: Any]
     }

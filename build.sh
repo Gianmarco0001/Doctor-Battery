@@ -80,7 +80,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --deep --sign - "$APP_BUNDLE" 2>/dev/null || true
+codesign --force --sign - "$APP_BUNDLE" 2>/dev/null || true
 
 echo "Done: $APP_BUNDLE"
 echo "Architectures:"

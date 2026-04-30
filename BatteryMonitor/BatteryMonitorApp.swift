@@ -55,12 +55,23 @@ struct MenuBarLabel: View {
     var body: some View {
         if let s = vm.macSnapshot {
             HStack(spacing: 4) {
-                Image(systemName: s.isCharging ? "battery.100.bolt" : "battery.75")
+                Image(systemName: batteryIcon(percent: s.nominalChargePercent, charging: s.isCharging))
                 Text(String(format: "%.0f%%", s.nominalChargePercent))
                     .font(.system(.caption, design: .monospaced))
             }
         } else {
             Image(systemName: "battery.0")
+        }
+    }
+
+    private func batteryIcon(percent: Double, charging: Bool) -> String {
+        if charging { return "battery.100.bolt" }
+        switch percent {
+        case ..<13: return "battery.0"
+        case ..<38: return "battery.25"
+        case ..<63: return "battery.50"
+        case ..<88: return "battery.75"
+        default:    return "battery.100"
         }
     }
 }

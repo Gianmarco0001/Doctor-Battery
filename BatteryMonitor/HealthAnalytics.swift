@@ -17,7 +17,7 @@ struct HealthAnomaly {
 enum HealthAnalytics {
     static func forecast(points: [HistoryPoint], threshold: Double = 80.0) -> HealthForecast? {
         let pts = points.compactMap { p -> (Date, Double, Int?)? in
-            guard let h = p.healthPercent, h > 50, h <= 105 else { return nil }
+            guard let h = p.healthPercent, h >= 5, h <= 100 else { return nil }
             return (p.timestamp, h, p.cycleCount)
         }
         guard pts.count >= 8 else { return nil }
@@ -31,7 +31,7 @@ enum HealthAnalytics {
         guard r2 >= 0.0 else { return nil }
 
         let now = Date().timeIntervalSince(first.0) / 86400.0
-        let currentHealth = max(min(intercept + slope * now, 105), 0)
+        let currentHealth = max(min(intercept + slope * now, 100), 0)
 
         var thresholdDate: Date?
         if slope < -0.001 {
@@ -82,22 +82,21 @@ enum HealthAnalytics {
 
     private static func linearRegression(xs: [Double], ys: [Double]) -> (Double, Double, Double) {
         let n = Double(xs.count)
-        let sumX = xs.reduce(0, +)
-        let sumY = ys.reduce(0, +)
-        let sumXY = zip(xs, ys).map(*).reduce(0, +)
-        let sumX2 = xs.map { $0 * $0 }.reduce(0, +)
-        let denom = n * sumX2 - sumX * sumX
-        guard denom != 0 else { return (0, sumY / n, 0) }
-        let slope = (n * sumXY - sumX * sumY) / denom
-        let intercept = (sumY - slope * sumX) / n
-        let meanY = sumY / n
-        let ssTot = ys.map { ($0 - meanY) * ($0 - meanY) }.reduce(0, +)
-        let ssRes = zip(xs, ys).map { (x, y) -> Double in
-            let pred: Double = slope * x + intercept
-            let d: Double = y - pred
-            return d * d
-        }.reduce(0.0, +)
-        let r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0
+        guard n > 0 else { return (0, 0, 0) }
+        let meanX = xs.reduce(0, +) / n
+        let meanY = ys.reduce(0, +) / n
+        var sxx = 0.0, sxy = 0.0, syy = 0.0
+        for i in 0..<xs.count {
+            let dx = xs[i] - meanX
+            let dy = ys[i] - meanY
+            sxx += dx * dx
+            sxy += dx * dy
+            syy += dy * dy
+        }
+        guard sxx > 0 else { return (0, meanY, 0) }
+        let slope = sxy / sxx
+        let intercept = meanY - slope * meanX
+        let r2 = syy > 0 ? max(0, min(1, (sxy * sxy) / (sxx * syy))) : 0
         return (slope, intercept, r2)
     }
 }

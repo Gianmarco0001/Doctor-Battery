@@ -8,6 +8,7 @@ enum Selection: Hashable {
     case compare
 }
 
+@MainActor
 final class AppViewModel: ObservableObject {
     @Published var selection: Selection = .mac
     @Published var macSnapshot: BatterySnapshot?
@@ -18,7 +19,7 @@ final class AppViewModel: ObservableObject {
     @Published var macWattageHistory: [(Date, Double)] = []
     @Published var lastFullDischarge: Date?
     @Published var systemTemps: SystemTemperatureSummary = SystemTemperatureSummary(all: [], cpuAvg: nil, cpuMax: nil, gpuAvg: nil, gpuMax: nil, socMax: nil, nandMax: nil)
-    private var tempSamples: [SystemTemperatureSummary] = []
+    private var tempReadingSamples: [[SystemTemperatureReading]] = []
     private let tempWindowSize = 5
 
     private var fastTimer: Timer?
@@ -32,45 +33,117 @@ final class AppViewModel: ObservableObject {
     private var iosRefreshInFlight = false
     private var deviceScanInFlight = false
     private var lastAnomalyCheck: Date = .distantPast
+    private let fastIntervalActive: TimeInterval = 5.0
+    private let fastIntervalBackground: TimeInterval = 30.0
+    private var occlusionObserver: NSObjectProtocol?
+    private var activationObserver: NSObjectProtocol?
+    private var deactivationObserver: NSObjectProtocol?
+    private var rebuildPending = false
+    private var lastFastInterval: TimeInterval = 0
+    private var lastSlowEnabled: Bool = false
 
     init() {
         refreshAll()
         rescanDevices()
-        let fast = Timer(timeInterval: 3.0, repeats: true) { [weak self] _ in
-            self?.refreshAll()
-        }
-        let slow = Timer(timeInterval: 10.0, repeats: true) { [weak self] _ in
-            self?.rescanDevices()
-        }
         let log = Timer(timeInterval: 30.0, repeats: true) { [weak self] _ in
-            self?.maybeLog()
+            Task { @MainActor [weak self] in self?.maybeLog() }
         }
         let anomaly = Timer(timeInterval: 600.0, repeats: true) { [weak self] _ in
-            self?.checkAnomalies()
+            Task { @MainActor [weak self] in self?.checkAnomalies() }
         }
-        RunLoop.main.add(fast, forMode: .common)
-        RunLoop.main.add(slow, forMode: .common)
         RunLoop.main.add(log, forMode: .common)
         RunLoop.main.add(anomaly, forMode: .common)
-        fastTimer = fast; slowTimer = slow; loggingTimer = log; anomalyTimer = anomaly
+        loggingTimer = log; anomalyTimer = anomaly
+        rebuildLiveTimers(active: NSApp?.isActive ?? true)
+
+        let nc = NotificationCenter.default
+        activationObserver = nc.addObserver(forName: NSApplication.didBecomeActiveNotification,
+                                            object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.scheduleRebuild() }
+        }
+        deactivationObserver = nc.addObserver(forName: NSApplication.didResignActiveNotification,
+                                              object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.scheduleRebuild() }
+        }
+        occlusionObserver = nc.addObserver(forName: NSWindow.didChangeOcclusionStateNotification,
+                                           object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.scheduleRebuild() }
+        }
+    }
+
+    private func scheduleRebuild() {
+        guard !rebuildPending else { return }
+        rebuildPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self = self else { return }
+            self.rebuildPending = false
+            self.rebuildLiveTimers(active: NSApp?.isActive ?? true)
+        }
     }
 
     deinit {
         fastTimer?.invalidate(); slowTimer?.invalidate()
         loggingTimer?.invalidate(); anomalyTimer?.invalidate()
+        let nc = NotificationCenter.default
+        [activationObserver, deactivationObserver, occlusionObserver]
+            .compactMap { $0 }
+            .forEach(nc.removeObserver)
+    }
+
+    private func anyWindowVisible() -> Bool {
+        guard let app = NSApp else { return true }
+        for w in app.windows where w.isVisible {
+            if w.occlusionState.contains(.visible) { return true }
+        }
+        return false
+    }
+
+    private func rebuildLiveTimers(active: Bool) {
+        let visible = anyWindowVisible()
+        let fastInterval = (active && visible) ? fastIntervalActive : fastIntervalBackground
+        let slowEnabled = !libimobileMissing
+
+        if fastInterval == lastFastInterval && slowEnabled == lastSlowEnabled
+            && fastTimer != nil && (slowTimer != nil) == slowEnabled {
+            return
+        }
+
+        fastTimer?.invalidate(); slowTimer?.invalidate()
+
+        let fast = Timer(timeInterval: fastInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.refreshAll() }
+        }
+        RunLoop.main.add(fast, forMode: .common)
+        fastTimer = fast
+
+        if slowEnabled {
+            let slow = Timer(timeInterval: 10.0, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.rescanDevices() }
+            }
+            RunLoop.main.add(slow, forMode: .common)
+            slowTimer = slow
+        } else {
+            slowTimer = nil
+        }
+
+        lastFastInterval = fastInterval
+        lastSlowEnabled = slowEnabled
     }
 
     func checkAnomalies() {
         let threshold = SettingsModel.shared.healthAnomalyThreshold
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            guard let self = self else { return }
+        let calibrationOn = SettingsModel.shared.calibrationNotify
+        let devicesSnapshot: [(udid: String, name: String)] = iosDevices.map { ($0.udid, $0.name) }
+        let lastDischargeSnapshot = lastFullDischarge
+        HistoryStore.shared.prune()
+        DispatchQueue.global(qos: .utility).async {
             let macPts = HistoryStore.shared.points(deviceId: "mac",
                 since: Date().addingTimeInterval(-30 * 86400))
             if let a = HealthAnalytics.anomaly(points: macPts, windowDays: 7,
                                                deltaThreshold: threshold) {
                 DispatchQueue.main.async { Notifier.shared.anomalyAlert(deviceName: "Mac", anomaly: a) }
             }
-            for d in self.iosDevices {
+            for d in devicesSnapshot {
                 let pts = HistoryStore.shared.points(deviceId: d.udid,
                     since: Date().addingTimeInterval(-30 * 86400))
                 if let a = HealthAnalytics.anomaly(points: pts, windowDays: 7,
@@ -79,15 +152,15 @@ final class AppViewModel: ObservableObject {
                 }
             }
 
-            if SettingsModel.shared.calibrationNotify, let last = self.lastFullDischarge {
+            if calibrationOn, let last = lastDischargeSnapshot {
                 let days = Date().timeIntervalSince(last) / 86400
                 if days > 30 {
                     DispatchQueue.main.async { Notifier.shared.calibrationReminder(days: Int(days)) }
                 }
-            } else if SettingsModel.shared.calibrationNotify, self.lastFullDischarge == nil {
-                let macPts = HistoryStore.shared.points(deviceId: "mac",
+            } else if calibrationOn, lastDischargeSnapshot == nil {
+                let pts = HistoryStore.shared.points(deviceId: "mac",
                     since: Date().addingTimeInterval(-90 * 86400))
-                if macPts.count > 50 {
+                if pts.count > 50 {
                     DispatchQueue.main.async { Notifier.shared.calibrationReminder(days: 30) }
                 }
             }
@@ -97,8 +170,8 @@ final class AppViewModel: ObservableObject {
     func refreshAll() {
         let mac = BatteryReader.read()
         let raw = SystemTemperatures.read()
-        tempSamples.append(raw)
-        if tempSamples.count > tempWindowSize { tempSamples.removeFirst() }
+        tempReadingSamples.append(raw)
+        if tempReadingSamples.count > tempWindowSize { tempReadingSamples.removeFirst() }
         self.macSnapshot = mac
         self.systemTemps = smoothedTemps()
         if let m = mac {
@@ -129,18 +202,7 @@ final class AppViewModel: ObservableObject {
     }
 
     private func smoothedTemps() -> SystemTemperatureSummary {
-        func avg(_ vs: [Double]) -> Double? {
-            vs.isEmpty ? nil : vs.reduce(0, +) / Double(vs.count)
-        }
-        return SystemTemperatureSummary(
-            all: tempSamples.last?.all ?? [],
-            cpuAvg: avg(tempSamples.compactMap(\.cpuAvg)),
-            cpuMax: avg(tempSamples.compactMap(\.cpuMax)),
-            gpuAvg: avg(tempSamples.compactMap(\.gpuAvg)),
-            gpuMax: avg(tempSamples.compactMap(\.gpuMax)),
-            socMax: avg(tempSamples.compactMap(\.socMax)),
-            nandMax: avg(tempSamples.compactMap(\.nandMax))
-        )
+        return SystemTemperatures.summarize(samples: tempReadingSamples)
     }
 
     private func appendWattage(_ s: BatterySnapshot) {
@@ -184,9 +246,16 @@ final class AppViewModel: ObservableObject {
             }
             DispatchQueue.main.async {
                 guard let self = self else { return }
+                let missingChanged = self.libimobileMissing != missing
                 self.libimobileMissing = missing
                 if self.iosDevices != devs { self.iosDevices = devs }
+                let liveUDIDs = Set(devs.map(\.udid))
+                self.lastLoggedIOS = self.lastLoggedIOS.filter { liveUDIDs.contains($0.key) }
+                self.iosSnapshots = self.iosSnapshots.filter { liveUDIDs.contains($0.key) }
                 self.deviceScanInFlight = false
+                if missingChanged {
+                    self.rebuildLiveTimers(active: NSApp?.isActive ?? true)
+                }
             }
         }
     }
