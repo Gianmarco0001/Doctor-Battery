@@ -153,6 +153,7 @@ struct DBMiniRing: View {
     let percent: Double
     var size: CGFloat = 36
     var color: Color = .dbAccent
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -163,7 +164,7 @@ struct DBMiniRing: View {
                 .stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .shadow(color: color.opacity(0.55), radius: 6)
-                .animation(.easeInOut(duration: 0.6), value: percent)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: percent)
         }
         .frame(width: size, height: size)
     }
@@ -173,6 +174,7 @@ struct DBChargeGauge: View {
     let percent: Double
     let charging: Bool
     var size: CGFloat = 140
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var color: Color {
         if percent < 20 { return .dbBad }
@@ -197,14 +199,14 @@ struct DBChargeGauge: View {
                 )
                 .rotationEffect(.degrees(-90))
                 .shadow(color: color.opacity(0.55), radius: 12)
-                .animation(.easeInOut(duration: 0.6), value: percent)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: percent)
             VStack(spacing: 2) {
                 if charging {
                     Image(systemName: "bolt.fill")
                         .foregroundStyle(color)
                         .font(.system(size: 11, weight: .bold))
                 }
-                Text(String(format: "%.0f", percent))
+                Text(DBFormat.decimal(percent, fraction: 0))
                     .font(.system(size: size * 0.32, weight: .bold, design: .rounded))
                     .foregroundStyle(Color.dbText)
                     .monospacedDigit()

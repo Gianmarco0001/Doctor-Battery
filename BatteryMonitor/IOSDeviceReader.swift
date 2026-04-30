@@ -275,15 +275,15 @@ enum IOSDeviceReader {
     private static func decodeError(_ stderr: String) -> String {
         let s = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.contains("Password protected") || s.contains("-17") {
-            return "Bloccato — sblocca il dispositivo per autorizzare lockdownd"
+            return NSLocalizedString("Bloccato — sblocca il dispositivo per autorizzare lockdownd", comment: "")
         }
         if s.contains("not found") {
-            return "Non raggiungibile in rete (schermo spento o usbmuxd offline)"
+            return NSLocalizedString("Non raggiungibile in rete (schermo spento o usbmuxd offline)", comment: "")
         }
         if s.contains("PairingDialogResponsePending") || s.contains("not paired") || s.contains("pair") {
-            return "Trust non autorizzato — accetta il prompt sul dispositivo"
+            return NSLocalizedString("Trust non autorizzato — accetta il prompt sul dispositivo", comment: "")
         }
-        return s.isEmpty ? "Lettura non riuscita" : s
+        return s.isEmpty ? NSLocalizedString("Lettura non riuscita", comment: "") : s
     }
 
     private static let minimalEnv: [String: String] = {

@@ -13,6 +13,7 @@ struct DoctorBatteryApp: App {
         WindowGroup("Doctor Battery") {
             ContentView(vm: vm)
                 .frame(minWidth: 820, minHeight: 640)
+                .dynamicTypeSize(.medium ... .accessibility1)
         }
         .commands {
             CommandGroup(replacing: .appInfo) {
@@ -24,6 +25,7 @@ struct DoctorBatteryApp: App {
 
         Settings {
             SettingsView()
+                .dynamicTypeSize(.medium ... .accessibility1)
         }
 
         MenuBarExtra {
@@ -81,11 +83,11 @@ struct MenuBarContent: View {
         VStack(alignment: .leading, spacing: 8) {
             if let s = vm.macSnapshot {
                 Text("Mac").font(.headline)
-                miniRow(LocalizedStringKey("Carica"), String(format: "%.0f %%", s.nominalChargePercent))
-                miniRow(LocalizedStringKey("Salute"), String(format: "%.1f %%", s.healthPercent))
+                miniRow(LocalizedStringKey("Carica"), DBFormat.percent(s.nominalChargePercent, fraction: 0))
+                miniRow(LocalizedStringKey("Salute"), DBFormat.percent(s.healthPercent, fraction: 1))
                 miniRow(LocalizedStringKey("Cicli"), "\(s.cycleCount)")
-                miniRow(LocalizedStringKey("Potenza"), String(format: "%.2f W", s.wattage))
-                miniRow(LocalizedStringKey("Temp"), String(format: "%.1f °C", s.temperatureC))
+                miniRow(LocalizedStringKey("Potenza"), DBFormat.watt(s.wattage, fraction: 2))
+                miniRow(LocalizedStringKey("Temp"), DBFormat.celsius(s.temperatureC, fraction: 1))
                 Divider()
             }
             ForEach(vm.iosDevices) { d in
@@ -94,7 +96,7 @@ struct MenuBarContent: View {
                 if let s = snap {
                     miniRow(LocalizedStringKey("Carica"), "\(s.chargePercent) %")
                     if let h = s.healthPercent {
-                        miniRow(LocalizedStringKey("Salute"), String(format: "%.1f %%", h))
+                        miniRow(LocalizedStringKey("Salute"), DBFormat.percent(h, fraction: 1))
                     }
                     if let c = s.cycleCount { miniRow(LocalizedStringKey("Cicli"), "\(c)") }
                 }

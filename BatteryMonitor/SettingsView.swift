@@ -109,11 +109,11 @@ struct SettingsView: View {
                         Divider().background(Color.dbBorder)
                         doubleStepperRow(label: NSLocalizedString("Soglia temperatura (°C)", comment: ""),
                                          value: $model.temperatureThreshold, range: 35...50, step: 1,
-                                         display: { String(format: "%.0f °C", $0) }, valueColor: .dbWarn)
+                                         display: { DBFormat.celsius($0, fraction: 0) }, valueColor: .dbWarn)
                         Divider().background(Color.dbBorder)
                         doubleStepperRow(label: NSLocalizedString("Soglia anomalia salute (%/settimana)", comment: ""),
                                          value: $model.healthAnomalyThreshold, range: 0.5...10, step: 0.5,
-                                         display: { String(format: "%.1f %%", $0) }, valueColor: .dbAccent2)
+                                         display: { DBFormat.percent($0, fraction: 1) }, valueColor: .dbAccent2)
                     }
 
                     sectionGroup(title: NSLocalizedString("Avanzate", comment: "")) {

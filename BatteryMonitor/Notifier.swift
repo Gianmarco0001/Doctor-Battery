@@ -23,7 +23,7 @@ final class Notifier {
         if !s.isCharging && s.nominalChargePercent < lowT {
             fire(key: "mac.low",
                  title: NSLocalizedString("Battery low", comment: ""),
-                 body: String(format: "Mac %.0f %%", s.nominalChargePercent))
+                 body: "Mac " + DBFormat.percent(s.nominalChargePercent, fraction: 0))
         }
         if s.isPluggedIn && s.nominalChargePercent >= 95 && !s.fullyCharged {
             fire(key: "mac.high",
@@ -33,7 +33,7 @@ final class Notifier {
         if s.temperatureC > tempT {
             fire(key: "mac.hot",
                  title: NSLocalizedString("Battery hot", comment: ""),
-                 body: String(format: "%.1f °C", s.temperatureC))
+                 body: DBFormat.celsius(s.temperatureC, fraction: 1))
         }
         if s.cycleCount > 0 && s.cycleCount % 50 == 0 {
             fire(key: "mac.cycles.\(s.cycleCount)",
@@ -54,14 +54,14 @@ final class Notifier {
         if let t = s.temperatureC, t > tempT {
             fire(key: "ios.\(udid).hot",
                  title: "\(name)",
-                 body: NSLocalizedString("Battery hot", comment: "") + String(format: " %.1f °C", t))
+                 body: NSLocalizedString("Battery hot", comment: "") + " " + DBFormat.celsius(t, fraction: 1))
         }
     }
 
     func anomalyAlert(deviceName: String, anomaly: HealthAnomaly) {
         fire(key: "anomaly.\(deviceName)",
              title: NSLocalizedString("Anomalia rilevata", comment: ""),
-             body: "\(deviceName): -\(String(format: "%.1f", anomaly.deltaPercent)) % / \(anomaly.windowDays)d")
+             body: "\(deviceName): -\(DBFormat.decimal(anomaly.deltaPercent, fraction: 1)) % / \(anomaly.windowDays)d")
     }
 
     func calibrationReminder(days: Int) {

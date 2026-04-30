@@ -114,3 +114,12 @@
 "Carica nel tempo" = "Charge over time";
 "Informazioni su Doctor Battery" = "About Doctor Battery";
 "Doctor Battery" = "Doctor Battery";
+"Tiepida" = "Warm";
+"Calda" = "Hot";
+"non disponibile" = "unavailable";
+"in raccolta dati…" = "collecting data…";
+"Esporta CSV" = "Export CSV";
+"Launch at login error" = "Launch at login error";
+"OK" = "OK";
+"Range ottimale" = "Optimal range";
+"%d rimasti · ~%.1f anni" = "%d left · ~%.1f years";
