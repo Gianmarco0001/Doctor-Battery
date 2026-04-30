@@ -93,7 +93,8 @@ struct DBKVRow: View {
     }
 }
 
-struct DBAurora: View {
+struct DBAurora: View, Equatable {
+    static func == (lhs: DBAurora, rhs: DBAurora) -> Bool { true }
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width

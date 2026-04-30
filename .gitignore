@@ -8,3 +8,4 @@ build/
 .vscode/
 icon-styled.png
 test.zip
+BatteryMonitor/BatteryMonitor.code-workspace

@@ -4,7 +4,6 @@ import AppKit
 @main
 struct DoctorBatteryApp: App {
     @StateObject private var vm = AppViewModel()
-    @StateObject private var settings = SettingsModel.shared
 
     init() {
         Notifier.shared.requestAuthIfNeeded()
@@ -30,7 +29,7 @@ struct DoctorBatteryApp: App {
         MenuBarExtra {
             MenuBarContent(vm: vm)
         } label: {
-            MenuBarLabel(vm: vm)
+            MenuBarLabel(model: vm.menuBar)
         }
         .menuBarExtraStyle(.window)
     }
@@ -51,12 +50,12 @@ struct DoctorBatteryApp: App {
 }
 
 struct MenuBarLabel: View {
-    @ObservedObject var vm: AppViewModel
+    @ObservedObject var model: MenuBarModel
     var body: some View {
-        if let s = vm.macSnapshot {
+        if model.hasSnapshot {
             HStack(spacing: 4) {
-                Image(systemName: batteryIcon(percent: s.nominalChargePercent, charging: s.isCharging))
-                Text(String(format: "%.0f%%", s.nominalChargePercent))
+                Image(systemName: batteryIcon(percent: model.percent, charging: model.isCharging))
+                Text("\(model.percent)%")
                     .font(.system(.caption, design: .monospaced))
             }
         } else {
@@ -64,7 +63,7 @@ struct MenuBarLabel: View {
         }
     }
 
-    private func batteryIcon(percent: Double, charging: Bool) -> String {
+    private func batteryIcon(percent: Int, charging: Bool) -> String {
         if charging { return "battery.100.bolt" }
         switch percent {
         case ..<13: return "battery.0"

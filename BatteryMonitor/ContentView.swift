@@ -9,6 +9,24 @@ enum Selection: Hashable {
 }
 
 @MainActor
+final class MenuBarModel: ObservableObject {
+    @Published var percent: Int = 0
+    @Published var isCharging: Bool = false
+    @Published var hasSnapshot: Bool = false
+
+    func update(snapshot: BatterySnapshot?) {
+        guard let s = snapshot else {
+            if hasSnapshot { hasSnapshot = false }
+            return
+        }
+        let p = Int(s.nominalChargePercent.rounded())
+        if p != percent { percent = p }
+        if s.isCharging != isCharging { isCharging = s.isCharging }
+        if !hasSnapshot { hasSnapshot = true }
+    }
+}
+
+@MainActor
 final class AppViewModel: ObservableObject {
     @Published var selection: Selection = .mac
     @Published var macSnapshot: BatterySnapshot?
@@ -26,6 +44,7 @@ final class AppViewModel: ObservableObject {
 
     @Published var macForecast: HealthForecast?
     @Published var iosForecasts: [String: HealthForecast] = [:]
+    let menuBar = MenuBarModel()
     private var lastForecastRefresh: Date = .distantPast
     private let forecastRefreshInterval: TimeInterval = 5 * 60
 
@@ -36,7 +55,9 @@ final class AppViewModel: ObservableObject {
     private var lastLoggedMac: Date = .distantPast
     private var lastLoggedIOS: [String: Date] = [:]
     private var logInterval: TimeInterval {
-        TimeInterval(max(1, SettingsModel.shared.logIntervalMin)) * 60
+        let m = SettingsModel.shared.logIntervalMin
+        let clamped = min(1440, max(1, m))
+        return TimeInterval(clamped) * 60
     }
     private let iosQueue = DispatchQueue(label: "doctorbattery.ios", qos: .userInitiated)
     private var iosRefreshInFlight = false
@@ -85,7 +106,7 @@ final class AppViewModel: ObservableObject {
         guard !rebuildPending else { return }
         rebuildPending = true
         Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            try? await Task.sleep(for: .milliseconds(250))
             guard let self = self else { return }
             self.rebuildPending = false
             self.rebuildLiveTimers(active: NSApp?.isActive ?? true)
@@ -184,6 +205,7 @@ final class AppViewModel: ObservableObject {
         tempReadingSamples.append(raw)
         if tempReadingSamples.count > tempWindowSize { tempReadingSamples.removeFirst() }
         self.macSnapshot = mac
+        menuBar.update(snapshot: mac)
         let newTemps = smoothedTemps()
         if !temperatureSummariesApproxEqual(systemTemps, newTemps) {
             self.systemTemps = newTemps
@@ -204,7 +226,7 @@ final class AppViewModel: ObservableObject {
             }
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                self.iosSnapshots = iosSnaps
+                if self.iosSnapshots != iosSnaps { self.iosSnapshots = iosSnaps }
                 for d in devices {
                     if let s = iosSnaps[d.udid] {
                         Notifier.shared.evaluateIOS(udid: d.udid, name: d.name, snapshot: s)
@@ -279,10 +301,10 @@ final class AppViewModel: ObservableObject {
         guard now.timeIntervalSince(lastForecastRefresh) >= forecastRefreshInterval else { return }
         lastForecastRefresh = now
         let udids = iosDevices.map(\.udid)
-        Task.detached(priority: .utility) {
+        Task { @MainActor [weak self] in
             let since = Date.now.addingTimeInterval(-365 * 86400)
             let macPts = await HistoryStore.shared.pointsAsync(deviceId: "mac", since: since)
-            let macForecast = HealthAnalytics.forecast(points: macPts)
+            let newMacForecast = HealthAnalytics.forecast(points: macPts)
             var iosForecastsMut: [String: HealthForecast] = [:]
             for udid in udids {
                 let pts = await HistoryStore.shared.pointsAsync(deviceId: udid, since: since)
@@ -290,12 +312,9 @@ final class AppViewModel: ObservableObject {
                     iosForecastsMut[udid] = f
                 }
             }
-            let iosForecastsFinal = iosForecastsMut
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                self.macForecast = macForecast
-                self.iosForecasts = iosForecastsFinal
-            }
+            guard let self else { return }
+            self.macForecast = newMacForecast
+            self.iosForecasts = iosForecastsMut
         }
     }
 
@@ -337,7 +356,7 @@ struct ContentView: View {
             Divider().background(Color.dbBorder)
             ZStack {
                 Color.dbBg
-                DBAurora()
+                DBAurora().equatable()
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -354,7 +373,10 @@ struct ContentView: View {
             MacDetailView(vm: vm)
         case .ios(let udid):
             if let dev = vm.iosDevices.first(where: { $0.udid == udid }) {
-                IOSDetailView(device: dev, snapshot: vm.iosSnapshots[udid], forecast: vm.iosForecasts[udid])
+                IOSDetailView(device: dev,
+                              snapshot: vm.iosSnapshots[udid],
+                              forecast: vm.iosForecasts[udid],
+                              onRefresh: { vm.refreshAll() })
             } else {
                 emptyState("Device unavailable")
             }
@@ -903,6 +925,7 @@ struct IOSDetailView: View {
     let device: IOSDevice
     let snapshot: IOSBatterySnapshot?
     let forecast: HealthForecast?
+    var onRefresh: () -> Void = {}
     @State private var showDiag = false
 
     var body: some View {
@@ -911,7 +934,7 @@ struct IOSDetailView: View {
                 DBHeader(title: device.name,
                          subtitle: "\(device.osVersion) · \(device.connection.rawValue)",
                          timestamp: snapshot?.timestamp,
-                         onRefresh: { })
+                         onRefresh: onRefresh)
                 if let reason = device.unreachableReason {
                     HStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.dbWarn)
@@ -1154,15 +1177,11 @@ struct IOSDetailView: View {
     }
 }
 
-struct CompareSeries: Identifiable, Equatable {
+struct CompareSeries: Identifiable {
     let id: String
     let label: String
     let points: [HistoryPoint]
-
-    static func == (lhs: CompareSeries, rhs: CompareSeries) -> Bool {
-        lhs.id == rhs.id && lhs.points.count == rhs.points.count
-            && lhs.points.last?.timestamp == rhs.points.last?.timestamp
-    }
+    let forecast: HealthForecast?
 }
 
 struct CompareView: View {
@@ -1183,23 +1202,26 @@ struct CompareView: View {
                 healthChartCard
                 chargeChartCard
                 ForEach(data) { series in
-                    if let f = HealthAnalytics.forecast(points: series.points) {
+                    if let f = series.forecast {
                         ForecastCard(label: series.label, forecast: f, points: series.points)
                     }
                 }
             }
             .padding(28)
         }
-        .task(id: range) {
+        .task(id: ReloadKey(range: range, udids: vm.iosDevices.map(\.udid))) {
             await reload(devices: vm.iosDevices)
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled else { return }
                 await reload(devices: vm.iosDevices)
             }
         }
-        .onChange(of: vm.iosDevices) { _ in
-            Task { await reload(devices: vm.iosDevices) }
-        }
+    }
+
+    private struct ReloadKey: Hashable {
+        let range: HistoryCard.HistoryRange
+        let udids: [String]
     }
 
     private var rangePicker: some View {
@@ -1280,10 +1302,16 @@ struct CompareView: View {
         let since = Date.now.addingTimeInterval(-range.seconds)
         var out: [CompareSeries] = []
         let macPts = await HistoryStore.shared.pointsAsync(deviceId: "mac", since: since)
-        if !macPts.isEmpty { out.append(CompareSeries(id: "mac", label: "Mac", points: macPts)) }
+        if !macPts.isEmpty {
+            out.append(CompareSeries(id: "mac", label: "Mac", points: macPts,
+                                     forecast: HealthAnalytics.forecast(points: macPts)))
+        }
         for d in devices {
             let pts = await HistoryStore.shared.pointsAsync(deviceId: d.udid, since: since)
-            if !pts.isEmpty { out.append(CompareSeries(id: d.udid, label: d.name, points: pts)) }
+            if !pts.isEmpty {
+                out.append(CompareSeries(id: d.udid, label: d.name, points: pts,
+                                         forecast: HealthAnalytics.forecast(points: pts)))
+            }
         }
         data = out
     }
@@ -1430,11 +1458,9 @@ struct HistoryCard: View {
                     }
                 }
                 Button {
-                    Task.detached(priority: .userInitiated) {
-                        if let url = HistoryStore.shared.exportCSV(deviceId: deviceId) {
-                            await MainActor.run {
-                                NSWorkspace.shared.activateFileViewerSelecting([url])
-                            }
+                    Task {
+                        if let url = await HistoryStore.shared.exportCSVAsync(deviceId: deviceId) {
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
                         }
                     }
                 } label: {
@@ -1453,6 +1479,7 @@ struct HistoryCard: View {
             } else {
                 let showSymbols = range == .week || range == .month || range == .all
                 HistoryChartBody(charge: chargeSeries, health: healthSeries, showSymbols: showSymbols)
+                    .equatable()
                     .frame(height: 160)
             }
         }
@@ -1460,7 +1487,8 @@ struct HistoryCard: View {
         .task(id: range) {
             await reload()
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled else { return }
                 await reload()
             }
         }
@@ -1489,7 +1517,9 @@ struct HistoryChartBody: View, Equatable {
         lhs.showSymbols == rhs.showSymbols
             && lhs.charge.count == rhs.charge.count
             && lhs.health.count == rhs.health.count
+            && lhs.charge.first?.timestamp == rhs.charge.first?.timestamp
             && lhs.charge.last?.timestamp == rhs.charge.last?.timestamp
+            && lhs.health.first?.timestamp == rhs.health.first?.timestamp
             && lhs.health.last?.timestamp == rhs.health.last?.timestamp
     }
 

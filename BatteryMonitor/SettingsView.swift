@@ -66,13 +66,18 @@ final class SettingsModel: ObservableObject {
             }
         } catch {
             NSLog("Launch at login error: \(error.localizedDescription)")
+            launchAtLoginErrorMessage = error.localizedDescription
+            launchAtLogin = !enabled
         }
     }
+
+    @Published var launchAtLoginErrorMessage: String?
 }
 
 struct SettingsView: View {
     @StateObject private var model = SettingsModel.shared
-    @State private var langSelection: String = (UserDefaults.standard.array(forKey: "AppleLanguages") as? [String])?.first ?? ""
+    @State private var langSelection: String = ""
+    @State private var langLoaded = false
 
     var body: some View {
         ZStack {
@@ -136,6 +141,16 @@ struct SettingsView: View {
         }
         .frame(width: 540, height: 580)
         .preferredColorScheme(.dark)
+        .alert(LocalizedStringKey("Launch at login error"),
+               isPresented: Binding(
+                   get: { model.launchAtLoginErrorMessage != nil },
+                   set: { if !$0 { model.launchAtLoginErrorMessage = nil } }
+               ),
+               presenting: model.launchAtLoginErrorMessage) { _ in
+            Button(LocalizedStringKey("OK"), role: .cancel) {}
+        } message: { msg in
+            Text(msg)
+        }
     }
 
     private var languageRow: some View {
@@ -153,6 +168,7 @@ struct SettingsView: View {
             .pickerStyle(.menu)
             .frame(maxWidth: 140)
             .onChange(of: langSelection) { newLang in
+                guard langLoaded else { return }
                 if newLang.isEmpty {
                     UserDefaults.standard.removeObject(forKey: "AppleLanguages")
                 } else {
@@ -160,6 +176,12 @@ struct SettingsView: View {
                 }
                 UserDefaults.standard.synchronize()
                 showRestartAlert()
+            }
+            .onAppear {
+                if !langLoaded {
+                    langSelection = (UserDefaults.standard.array(forKey: "AppleLanguages") as? [String])?.first ?? ""
+                    langLoaded = true
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -296,7 +318,7 @@ struct SettingsView: View {
         task.arguments = ["-n", url.path]
         try? task.run()
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            try? await Task.sleep(for: .seconds(1))
             NSApp.terminate(nil)
         }
     }

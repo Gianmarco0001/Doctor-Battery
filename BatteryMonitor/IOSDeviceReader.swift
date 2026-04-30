@@ -13,7 +13,7 @@ struct IOSDevice: Identifiable, Hashable, Sendable {
     let unreachableReason: String?
 }
 
-struct IOSAdapterInfo: Sendable {
+struct IOSAdapterInfo: Sendable, Equatable {
     let watts: Int?
     let description: String?
     let voltageV: Double?
@@ -21,7 +21,7 @@ struct IOSAdapterInfo: Sendable {
     let isWireless: Bool?
 }
 
-struct IOSBatterySnapshot: Sendable {
+struct IOSBatterySnapshot: Sendable, Equatable {
     let timestamp: Date
     let chargePercent: Int
     let isCharging: Bool
@@ -43,13 +43,13 @@ struct IOSBatterySnapshot: Sendable {
     let diagnostic: IOSDiagnosticInfo
 }
 
-struct IOSDiagnosticInfo: Sendable {
+struct IOSDiagnosticInfo: Sendable, Equatable {
     let batteryDomainRaw: String
     let ioregAttempts: [IORegAttempt]
 }
 
-struct IORegAttempt: Sendable, Identifiable {
-    let id = UUID()
+struct IORegAttempt: Sendable, Identifiable, Equatable {
+    var id: String { className }
     let className: String
     let stdout: String
     let stderr: String
@@ -286,10 +286,20 @@ enum IOSDeviceReader {
         return s.isEmpty ? "Lettura non riuscita" : s
     }
 
+    private static let minimalEnv: [String: String] = {
+        let parent = ProcessInfo.processInfo.environment
+        return [
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin",
+            "HOME": parent["HOME"] ?? "/var/empty",
+            "LANG": "C"
+        ]
+    }()
+
     private static func run(_ path: String, _ args: [String], timeout: TimeInterval = 5.0) -> (stdout: String, stderr: String) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: path)
         p.arguments = args
+        p.environment = minimalEnv
         let outPipe = Pipe(); let errPipe = Pipe()
         p.standardOutput = outPipe
         p.standardError = errPipe

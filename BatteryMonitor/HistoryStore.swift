@@ -28,9 +28,14 @@ final class HistoryStore: @unchecked Sendable {
 
     private init() {
         guard let dir = supportDir() else { return }
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
         let path = dir.appendingPathComponent("history.sqlite").path
         if sqlite3_open(path, &db) != SQLITE_OK { return }
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
         sqlite3_exec(db, """
             CREATE TABLE IF NOT EXISTS snapshots(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +61,7 @@ final class HistoryStore: @unchecked Sendable {
     func prune(retentionDays: Int = 730) {
         queue.async {
             guard let db = self.db else { return }
-            let cutoff = Date().addingTimeInterval(-Double(retentionDays) * 86400).timeIntervalSince1970
+            let cutoff = Date.now.addingTimeInterval(-Double(retentionDays) * 86400).timeIntervalSince1970
             var stmt: OpaquePointer?
             if sqlite3_prepare_v2(db, "DELETE FROM snapshots WHERE ts < ?;", -1, &stmt, nil) == SQLITE_OK {
                 sqlite3_bind_double(stmt, 1, cutoff)
@@ -168,41 +173,11 @@ final class HistoryStore: @unchecked Sendable {
     }
 
     func points(deviceId: String, since: Date) -> [HistoryPoint] {
-        var result: [HistoryPoint] = []
-        queue.sync {
-            guard let db = self.db else { return }
-            var stmt: OpaquePointer?
-            let sql = """
-                SELECT ts, charge_pct, health_pct, cycle_count, current_cap, max_cap,
-                       voltage, amperage, wattage, temperature, is_charging
-                FROM snapshots WHERE device_id = ? AND ts >= ? ORDER BY ts ASC;
-            """
-            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK { return }
-            defer { sqlite3_finalize(stmt) }
-            sqlite3_bind_text(stmt, 1, deviceId, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_double(stmt, 2, since.timeIntervalSince1970)
-            while sqlite3_step(stmt) == SQLITE_ROW {
-                result.append(HistoryPoint(
-                    timestamp: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0)),
-                    chargePercent: optDouble(stmt, 1),
-                    healthPercent: optDouble(stmt, 2),
-                    cycleCount: optInt(stmt, 3),
-                    currentCapacity: optInt(stmt, 4),
-                    maxCapacity: optInt(stmt, 5),
-                    voltage: optDouble(stmt, 6),
-                    amperage: optDouble(stmt, 7),
-                    wattage: optDouble(stmt, 8),
-                    temperature: optDouble(stmt, 9),
-                    isCharging: sqlite3_column_type(stmt, 10) == SQLITE_NULL ? nil
-                        : sqlite3_column_int(stmt, 10) != 0
-                ))
-            }
-        }
-        return result
+        queue.sync { pointsLocked(deviceId: deviceId, since: since) }
     }
 
-    func exportCSV(deviceId: String) -> URL? {
-        let pts = points(deviceId: deviceId, since: Date(timeIntervalSince1970: 0))
+    func exportCSVAsync(deviceId: String) async -> URL? {
+        let pts = await pointsAsync(deviceId: deviceId, since: Date(timeIntervalSince1970: 0))
         let df = ISO8601DateFormatter()
         var lines = ["timestamp,charge_pct,health_pct,cycle_count,current_cap,max_cap,voltage,amperage,wattage,temperature,is_charging"]
         for p in pts {
@@ -221,8 +196,12 @@ final class HistoryStore: @unchecked Sendable {
             lines.append(cols.joined(separator: ","))
         }
         guard let dir = supportDir() else { return nil }
-        let safe = deviceId.replacingOccurrences(of: "/", with: "_")
-        let url = dir.appendingPathComponent("export-\(safe)-\(Int(Date().timeIntervalSince1970)).csv")
+        let safe = String(deviceId.unicodeScalars.filter {
+            ($0 >= "0" && $0 <= "9") || ($0 >= "A" && $0 <= "Z")
+                || ($0 >= "a" && $0 <= "z") || $0 == "-" || $0 == "_" || $0 == "."
+        })
+        let safeNonEmpty = safe.isEmpty ? "device" : safe
+        let url = dir.appendingPathComponent("export-\(safeNonEmpty)-\(Int(Date.now.timeIntervalSince1970)).csv")
         try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
         return url
     }

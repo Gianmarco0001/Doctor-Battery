@@ -51,6 +51,7 @@ enum BatteryReader {
             ?? (props["MaxCapacity"] as? Int) ?? 0
         let curCap = (props["AppleRawCurrentCapacity"] as? Int)
             ?? (props["CurrentCapacity"] as? Int) ?? 0
+        let userCharge = props["CurrentCapacity"] as? Int ?? 0
         let cycles = props["CycleCount"] as? Int ?? 0
         let tempRaw = props["Temperature"] as? Int ?? 0
         let voltageRaw = props["Voltage"] as? Int ?? 0
@@ -73,9 +74,11 @@ enum BatteryReader {
         let amperageA = Double(Int32(truncatingIfNeeded: amperageRaw)) / 1000.0
         let wattage = voltageV * amperageA
 
-        let nominal = design > 0
-            ? min(100.0, Double(curCap) / Double(maxCap == 0 ? design : maxCap) * 100.0)
-            : 0
+        let nominal: Double = {
+            if (1...100).contains(userCharge) { return Double(userCharge) }
+            guard design > 0 else { return 0 }
+            return min(100.0, Double(curCap) / Double(maxCap == 0 ? design : maxCap) * 100.0)
+        }()
         let health = design > 0 ? min(100.0, Double(maxCap) / Double(design) * 100.0) : 0
 
         let mfgDate = decodeManufactureDate(props["ManufactureDate"] as? Int)
