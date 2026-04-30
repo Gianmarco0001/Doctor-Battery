@@ -16,11 +16,18 @@ final class AppViewModel: ObservableObject {
     @Published var iosSnapshots: [String: IOSBatterySnapshot] = [:]
     @Published var libimobileMissing: Bool = false
 
-    @Published var macWattageHistory: [(Date, Double)] = []
+    private var macWattageHistory: [(Date, Double)] = []
+    @Published var macWattageAvg1: Double?
+    @Published var macWattageAvg10: Double?
     @Published var lastFullDischarge: Date?
     @Published var systemTemps: SystemTemperatureSummary = SystemTemperatureSummary(all: [], cpuAvg: nil, cpuMax: nil, gpuAvg: nil, gpuMax: nil, socMax: nil, nandMax: nil)
     private var tempReadingSamples: [[SystemTemperatureReading]] = []
     private let tempWindowSize = 5
+
+    @Published var macForecast: HealthForecast?
+    @Published var iosForecasts: [String: HealthForecast] = [:]
+    private var lastForecastRefresh: Date = .distantPast
+    private let forecastRefreshInterval: TimeInterval = 5 * 60
 
     private var fastTimer: Timer?
     private var slowTimer: Timer?
@@ -45,11 +52,12 @@ final class AppViewModel: ObservableObject {
     init() {
         refreshAll()
         rescanDevices()
+        refreshForecastsIfNeeded()
         let log = Timer(timeInterval: 30.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.maybeLog() }
+            MainActor.assumeIsolated { self?.maybeLog() }
         }
         let anomaly = Timer(timeInterval: 600.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.checkAnomalies() }
+            MainActor.assumeIsolated { self?.checkAnomalies() }
         }
         RunLoop.main.add(log, forMode: .common)
         RunLoop.main.add(anomaly, forMode: .common)
@@ -59,22 +67,23 @@ final class AppViewModel: ObservableObject {
         let nc = NotificationCenter.default
         activationObserver = nc.addObserver(forName: NSApplication.didBecomeActiveNotification,
                                             object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.scheduleRebuild() }
+            MainActor.assumeIsolated { self?.scheduleRebuild() }
         }
         deactivationObserver = nc.addObserver(forName: NSApplication.didResignActiveNotification,
                                               object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.scheduleRebuild() }
+            MainActor.assumeIsolated { self?.scheduleRebuild() }
         }
         occlusionObserver = nc.addObserver(forName: NSWindow.didChangeOcclusionStateNotification,
                                            object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.scheduleRebuild() }
+            MainActor.assumeIsolated { self?.scheduleRebuild() }
         }
     }
 
     private func scheduleRebuild() {
         guard !rebuildPending else { return }
         rebuildPending = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 250_000_000)
             guard let self = self else { return }
             self.rebuildPending = false
             self.rebuildLiveTimers(active: NSApp?.isActive ?? true)
@@ -111,14 +120,14 @@ final class AppViewModel: ObservableObject {
         fastTimer?.invalidate(); slowTimer?.invalidate()
 
         let fast = Timer(timeInterval: fastInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.refreshAll() }
+            MainActor.assumeIsolated { self?.refreshAll() }
         }
         RunLoop.main.add(fast, forMode: .common)
         fastTimer = fast
 
         if slowEnabled {
             let slow = Timer(timeInterval: 10.0, repeats: true) { [weak self] _ in
-                Task { @MainActor [weak self] in self?.rescanDevices() }
+                MainActor.assumeIsolated { self?.rescanDevices() }
             }
             RunLoop.main.add(slow, forMode: .common)
             slowTimer = slow
@@ -138,14 +147,14 @@ final class AppViewModel: ObservableObject {
         HistoryStore.shared.prune()
         DispatchQueue.global(qos: .utility).async {
             let macPts = HistoryStore.shared.points(deviceId: "mac",
-                since: Date().addingTimeInterval(-30 * 86400))
+                since: Date.now.addingTimeInterval(-30 * 86400))
             if let a = HealthAnalytics.anomaly(points: macPts, windowDays: 7,
                                                deltaThreshold: threshold) {
                 DispatchQueue.main.async { Notifier.shared.anomalyAlert(deviceName: "Mac", anomaly: a) }
             }
             for d in devicesSnapshot {
                 let pts = HistoryStore.shared.points(deviceId: d.udid,
-                    since: Date().addingTimeInterval(-30 * 86400))
+                    since: Date.now.addingTimeInterval(-30 * 86400))
                 if let a = HealthAnalytics.anomaly(points: pts, windowDays: 7,
                                                    deltaThreshold: threshold) {
                     DispatchQueue.main.async { Notifier.shared.anomalyAlert(deviceName: d.name, anomaly: a) }
@@ -153,13 +162,13 @@ final class AppViewModel: ObservableObject {
             }
 
             if calibrationOn, let last = lastDischargeSnapshot {
-                let days = Date().timeIntervalSince(last) / 86400
+                let days = Date.now.timeIntervalSince(last) / 86400
                 if days > 30 {
                     DispatchQueue.main.async { Notifier.shared.calibrationReminder(days: Int(days)) }
                 }
             } else if calibrationOn, lastDischargeSnapshot == nil {
                 let pts = HistoryStore.shared.points(deviceId: "mac",
-                    since: Date().addingTimeInterval(-90 * 86400))
+                    since: Date.now.addingTimeInterval(-90 * 86400))
                 if pts.count > 50 {
                     DispatchQueue.main.async { Notifier.shared.calibrationReminder(days: 30) }
                 }
@@ -173,11 +182,14 @@ final class AppViewModel: ObservableObject {
         tempReadingSamples.append(raw)
         if tempReadingSamples.count > tempWindowSize { tempReadingSamples.removeFirst() }
         self.macSnapshot = mac
-        self.systemTemps = smoothedTemps()
+        let newTemps = smoothedTemps()
+        if !temperatureSummariesApproxEqual(systemTemps, newTemps) {
+            self.systemTemps = newTemps
+        }
         if let m = mac {
             Notifier.shared.evaluateMac(m)
             self.appendWattage(m)
-            if !m.isCharging && m.nominalChargePercent < 5 { self.lastFullDischarge = Date() }
+            if !m.isCharging && m.nominalChargePercent < 5 { self.lastFullDischarge = .now }
         }
 
         guard !iosRefreshInFlight else { return }
@@ -205,21 +217,47 @@ final class AppViewModel: ObservableObject {
         return SystemTemperatures.summarize(samples: tempReadingSamples)
     }
 
+    private func temperatureSummariesApproxEqual(_ a: SystemTemperatureSummary, _ b: SystemTemperatureSummary) -> Bool {
+        func close(_ x: Double?, _ y: Double?) -> Bool {
+            switch (x, y) {
+            case (nil, nil): return true
+            case let (l?, r?): return abs(l - r) < 0.5
+            default: return false
+            }
+        }
+        return a.all.count == b.all.count
+            && close(a.cpuAvg, b.cpuAvg) && close(a.cpuMax, b.cpuMax)
+            && close(a.gpuAvg, b.gpuAvg) && close(a.gpuMax, b.gpuMax)
+            && close(a.socMax, b.socMax) && close(a.nandMax, b.nandMax)
+    }
+
     private func appendWattage(_ s: BatterySnapshot) {
         macWattageHistory.append((s.timestamp, s.wattage))
-        let cutoff = Date().addingTimeInterval(-30 * 60)
+        let cutoff = Date.now.addingTimeInterval(-30 * 60)
         macWattageHistory.removeAll { $0.0 < cutoff }
+        let new1 = computeWattageAvg(window: 60)
+        let new10 = computeWattageAvg(window: 600)
+        if new1 != macWattageAvg1 { macWattageAvg1 = new1 }
+        if new10 != macWattageAvg10 { macWattageAvg10 = new10 }
+    }
+
+    private func computeWattageAvg(window: TimeInterval) -> Double? {
+        let cutoff = Date.now.addingTimeInterval(-window)
+        var sum = 0.0
+        var count = 0
+        for (ts, w) in macWattageHistory where ts >= cutoff {
+            sum += w
+            count += 1
+        }
+        return count == 0 ? nil : sum / Double(count)
     }
 
     func macWattageMovingAvg(window: TimeInterval) -> Double? {
-        let cutoff = Date().addingTimeInterval(-window)
-        let recent = macWattageHistory.filter { $0.0 >= cutoff }
-        guard !recent.isEmpty else { return nil }
-        return recent.map(\.1).reduce(0, +) / Double(recent.count)
+        computeWattageAvg(window: window)
     }
 
     private func maybeLog() {
-        let now = Date()
+        let now = Date.now
         if let m = macSnapshot, now.timeIntervalSince(lastLoggedMac) >= logInterval {
             HistoryStore.shared.recordMac(m)
             lastLoggedMac = now
@@ -229,6 +267,32 @@ final class AppViewModel: ObservableObject {
             if now.timeIntervalSince(last) >= logInterval {
                 HistoryStore.shared.recordIOS(udid: udid, snapshot: snap)
                 lastLoggedIOS[udid] = now
+            }
+        }
+        refreshForecastsIfNeeded()
+    }
+
+    private func refreshForecastsIfNeeded() {
+        let now = Date.now
+        guard now.timeIntervalSince(lastForecastRefresh) >= forecastRefreshInterval else { return }
+        lastForecastRefresh = now
+        let udids = iosDevices.map(\.udid)
+        Task.detached(priority: .utility) {
+            let since = Date.now.addingTimeInterval(-365 * 86400)
+            let macPts = await HistoryStore.shared.pointsAsync(deviceId: "mac", since: since)
+            let macForecast = HealthAnalytics.forecast(points: macPts)
+            var iosForecastsMut: [String: HealthForecast] = [:]
+            for udid in udids {
+                let pts = await HistoryStore.shared.pointsAsync(deviceId: udid, since: since)
+                if let f = HealthAnalytics.forecast(points: pts) {
+                    iosForecastsMut[udid] = f
+                }
+            }
+            let iosForecastsFinal = iosForecastsMut
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.macForecast = macForecast
+                self.iosForecasts = iosForecastsFinal
             }
         }
     }
@@ -288,7 +352,7 @@ struct ContentView: View {
             MacDetailView(vm: vm)
         case .ios(let udid):
             if let dev = vm.iosDevices.first(where: { $0.udid == udid }) {
-                IOSDetailView(device: dev, snapshot: vm.iosSnapshots[udid])
+                IOSDetailView(device: dev, snapshot: vm.iosSnapshots[udid], forecast: vm.iosForecasts[udid])
             } else {
                 emptyState("Device unavailable")
             }
@@ -551,6 +615,7 @@ struct DBHeader: View {
                     )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(LocalizedStringKey("Aggiorna")))
         }
     }
 }
@@ -592,7 +657,7 @@ struct MacDetailView: View {
                              timestamp: s.timestamp,
                              onRefresh: { vm.refreshAll() })
                     heroSection(s)
-                    forecastSection(deviceId: "mac", label: "Mac")
+                    forecastSection(deviceId: "mac", label: "Mac", forecast: vm.macForecast)
                     temperaturesCard(s)
                     chargeCard(s)
                     healthCard(s)
@@ -641,7 +706,7 @@ struct MacDetailView: View {
                         .foregroundStyle(Color.dbText)
                         .monospacedDigit()
                 }
-                Text(cyclesSubtitle(deviceId: "mac", currentCycles: s.cycleCount))
+                Text(MacDetailView.cyclesSubtitle(forecast: vm.macForecast))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(Color.dbAccent)
             }
@@ -702,11 +767,9 @@ struct MacDetailView: View {
     }
 
     @ViewBuilder
-    private func forecastSection(deviceId: String, label: String) -> some View {
-        let pts = HistoryStore.shared.points(deviceId: deviceId,
-                                             since: Date().addingTimeInterval(-365 * 86400))
-        if let f = HealthAnalytics.forecast(points: pts) {
-            ForecastCard(label: label, forecast: f, points: pts)
+    private func forecastSection(deviceId: String, label: String, forecast: HealthForecast?) -> some View {
+        if let f = forecast {
+            ForecastCard(label: label, forecast: f, deviceId: deviceId)
         } else {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
@@ -727,10 +790,8 @@ struct MacDetailView: View {
         }
     }
 
-    private func cyclesSubtitle(deviceId: String, currentCycles: Int) -> String {
-        let pts = HistoryStore.shared.points(deviceId: deviceId,
-                                             since: Date().addingTimeInterval(-365 * 86400))
-        if let f = HealthAnalytics.forecast(points: pts), let left = f.cyclesUntilThreshold {
+    fileprivate static func cyclesSubtitle(forecast: HealthForecast?) -> String {
+        if let f = forecast, let left = f.cyclesUntilThreshold {
             if let date = f.dateAtThreshold {
                 let years = date.timeIntervalSinceNow / (365.25 * 86400)
                 return String(format: "%d rimasti · ~%.1f anni", left, years)
@@ -839,6 +900,7 @@ struct MacDetailView: View {
 struct IOSDetailView: View {
     let device: IOSDevice
     let snapshot: IOSBatterySnapshot?
+    let forecast: HealthForecast?
     @State private var showDiag = false
 
     var body: some View {
@@ -925,7 +987,7 @@ struct IOSDetailView: View {
                     .font(.system(size: 38, weight: .bold, design: .rounded))
                     .foregroundStyle(Color.dbText)
                     .monospacedDigit()
-                Text(cyclesSubtitleIOS(udid: device.udid, currentCycles: s.cycleCount))
+                Text(IOSDetailView.cyclesSubtitleIOS(forecast: forecast, currentCycles: s.cycleCount))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(Color.dbAccent)
             }
@@ -958,9 +1020,8 @@ struct IOSDetailView: View {
         }
     }
 
-    private func cyclesSubtitleIOS(udid: String, currentCycles: Int?) -> String {
-        let pts = HistoryStore.shared.points(deviceId: udid, since: Date().addingTimeInterval(-365 * 86400))
-        if let f = HealthAnalytics.forecast(points: pts), let left = f.cyclesUntilThreshold {
+    fileprivate static func cyclesSubtitleIOS(forecast: HealthForecast?, currentCycles: Int?) -> String {
+        if let f = forecast, let left = f.cyclesUntilThreshold {
             if let date = f.dateAtThreshold {
                 let years = date.timeIntervalSinceNow / (365.25 * 86400)
                 return String(format: "%d rimasti · ~%.1f anni", left, years)
@@ -1060,7 +1121,7 @@ struct IOSDetailView: View {
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(Color.dbText3)
                         .textSelection(.enabled)
-                    ForEach(Array(d.ioregAttempts.enumerated()), id: \.offset) { _, t in
+                    ForEach(d.ioregAttempts) { t in
                         Text("idevicediagnostics ioregentry \(t.className)")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Color.dbText2)
@@ -1091,11 +1152,21 @@ struct IOSDetailView: View {
     }
 }
 
+struct CompareSeries: Identifiable, Equatable {
+    let id: String
+    let label: String
+    let points: [HistoryPoint]
+
+    static func == (lhs: CompareSeries, rhs: CompareSeries) -> Bool {
+        lhs.id == rhs.id && lhs.points.count == rhs.points.count
+            && lhs.points.last?.timestamp == rhs.points.last?.timestamp
+    }
+}
+
 struct CompareView: View {
     @ObservedObject var vm: AppViewModel
     @State private var range: HistoryCard.HistoryRange = .month
-    @State private var data: [(deviceId: String, label: String, points: [HistoryPoint])] = []
-    private let tick = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+    @State private var data: [CompareSeries] = []
 
     var body: some View {
         ScrollView {
@@ -1104,12 +1175,12 @@ struct CompareView: View {
                     DBHeader(title: NSLocalizedString("Tutti i dispositivi", comment: ""),
                              subtitle: NSLocalizedString("Confronto", comment: ""),
                              timestamp: nil,
-                             onRefresh: { vm.refreshAll(); reload() })
+                             onRefresh: { vm.refreshAll(); Task { await reload(devices: vm.iosDevices) } })
                 }
                 rangePicker
                 healthChartCard
                 chargeChartCard
-                ForEach(data, id: \.deviceId) { series in
+                ForEach(data) { series in
                     if let f = HealthAnalytics.forecast(points: series.points) {
                         ForecastCard(label: series.label, forecast: f, points: series.points)
                     }
@@ -1117,10 +1188,16 @@ struct CompareView: View {
             }
             .padding(28)
         }
-        .onAppear { reload() }
-        .onChange(of: range) { _ in reload() }
-        .onChange(of: vm.iosDevices) { _ in reload() }
-        .onReceive(tick) { _ in reload() }
+        .task(id: range) {
+            await reload(devices: vm.iosDevices)
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                await reload(devices: vm.iosDevices)
+            }
+        }
+        .onChange(of: vm.iosDevices) { _ in
+            Task { await reload(devices: vm.iosDevices) }
+        }
     }
 
     private var rangePicker: some View {
@@ -1174,7 +1251,7 @@ struct CompareView: View {
         } else {
             let showSymbols = range == .week || range == .month || range == .all
             Chart {
-                ForEach(data, id: \.deviceId) { series in
+                ForEach(data) { series in
                     ForEach(series.points, id: \.timestamp) { p in
                         if plotChargeNotHealth, let c = p.chargePercent {
                             LineMark(x: .value("t", p.timestamp), y: .value("%", c))
@@ -1197,14 +1274,14 @@ struct CompareView: View {
         }
     }
 
-    private func reload() {
-        let since = Date().addingTimeInterval(-range.seconds)
-        var out: [(String, String, [HistoryPoint])] = []
-        let macPts = HistoryStore.shared.points(deviceId: "mac", since: since)
-        if !macPts.isEmpty { out.append(("mac", "Mac", macPts)) }
-        for d in vm.iosDevices {
-            let pts = HistoryStore.shared.points(deviceId: d.udid, since: since)
-            if !pts.isEmpty { out.append((d.udid, d.name, pts)) }
+    private func reload(devices: [IOSDevice]) async {
+        let since = Date.now.addingTimeInterval(-range.seconds)
+        var out: [CompareSeries] = []
+        let macPts = await HistoryStore.shared.pointsAsync(deviceId: "mac", since: since)
+        if !macPts.isEmpty { out.append(CompareSeries(id: "mac", label: "Mac", points: macPts)) }
+        for d in devices {
+            let pts = await HistoryStore.shared.pointsAsync(deviceId: d.udid, since: since)
+            if !pts.isEmpty { out.append(CompareSeries(id: d.udid, label: d.name, points: pts)) }
         }
         data = out
     }
@@ -1213,7 +1290,14 @@ struct CompareView: View {
 struct ForecastCard: View {
     let label: String
     let forecast: HealthForecast
-    let points: [HistoryPoint]
+    var points: [HistoryPoint] = []
+    var deviceId: String? = nil
+
+    @State private var loadedPoints: [HistoryPoint] = []
+
+    private var displayPoints: [HistoryPoint] {
+        loadedPoints.isEmpty ? points : loadedPoints
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -1252,6 +1336,11 @@ struct ForecastCard: View {
             }
         }
         .dbCard()
+        .task(id: deviceId) {
+            guard let id = deviceId else { return }
+            let since = Date.now.addingTimeInterval(-365 * 86400)
+            loadedPoints = await HistoryStore.shared.pointsAsync(deviceId: id, since: since)
+        }
     }
 
     private func forecastStat(label: String, value: String, color: Color) -> some View {
@@ -1270,7 +1359,7 @@ struct ForecastCard: View {
 
     @ViewBuilder
     private var forecastChart: some View {
-        let series = points.compactMap { p -> (Date, Double)? in
+        let series = displayPoints.compactMap { p -> (Date, Double)? in
             guard let h = p.healthPercent else { return nil }
             return (p.timestamp, h)
         }
@@ -1303,8 +1392,9 @@ struct HistoryCard: View {
     let deviceId: String
     let title: String
     @State private var range: HistoryRange = .day
-    @State private var points: [HistoryPoint] = []
-    private let tick = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+    @State private var chargeSeries: [HistoryPoint] = []
+    @State private var healthSeries: [HistoryPoint] = []
+    @State private var lastTimestamp: Date?
 
     enum HistoryRange: String, CaseIterable, Identifiable {
         case hour = "1h", day = "24h", week = "7g", month = "30g", all = "All"
@@ -1324,7 +1414,7 @@ struct HistoryCard: View {
                 Spacer()
                 HStack(spacing: 0) {
                     ForEach(HistoryRange.allCases) { r in
-                        Button(action: { range = r; reload() }) {
+                        Button(action: { range = r }) {
                             Text(r.rawValue)
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(range == r ? Color.dbAccent : Color.dbText2)
@@ -1338,59 +1428,95 @@ struct HistoryCard: View {
                     }
                 }
                 Button {
-                    if let url = HistoryStore.shared.exportCSV(deviceId: deviceId) {
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    Task.detached(priority: .userInitiated) {
+                        if let url = HistoryStore.shared.exportCSV(deviceId: deviceId) {
+                            await MainActor.run {
+                                NSWorkspace.shared.activateFileViewerSelecting([url])
+                            }
+                        }
                     }
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                         .font(.system(size: 11))
                         .foregroundStyle(Color.dbText2)
-                }.buttonStyle(.plain)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(LocalizedStringKey("Esporta CSV")))
             }
-            if points.isEmpty {
+            if chargeSeries.isEmpty && healthSeries.isEmpty {
                 Text(NSLocalizedString("In raccolta dati… (uno snapshot ogni 5 minuti)", comment: ""))
                     .font(.system(size: 11))
                     .foregroundStyle(Color.dbText3)
                     .frame(maxWidth: .infinity, minHeight: 80)
             } else {
                 let showSymbols = range == .week || range == .month || range == .all
-                Chart {
-                    ForEach(points.filter { $0.chargePercent != nil }, id: \.timestamp) { p in
-                        LineMark(x: .value("t", p.timestamp),
-                                 y: .value("%", p.chargePercent ?? 0),
-                                 series: .value("s", "charge"))
-                            .foregroundStyle(by: .value("Serie", "Carica %"))
-                            .interpolationMethod(.linear)
-                            .symbol(showSymbols ? .circle : .square)
-                            .symbolSize(showSymbols ? 18 : 0)
-                    }
-                    ForEach(points.filter { $0.healthPercent != nil }, id: \.timestamp) { p in
-                        LineMark(x: .value("t", p.timestamp),
-                                 y: .value("%", p.healthPercent ?? 0),
-                                 series: .value("s", "health"))
-                            .foregroundStyle(by: .value("Serie", "Salute %"))
-                            .interpolationMethod(.linear)
-                            .symbol(showSymbols ? .circle : .square)
-                            .symbolSize(showSymbols ? 18 : 0)
-                    }
-                }
-                .chartForegroundStyleScale([
-                    "Carica %": Color.dbAccent2,
-                    "Salute %": Color.dbAccent
-                ])
-                .chartYScale(domain: 0...105)
-                .frame(height: 160)
+                HistoryChartBody(charge: chargeSeries, health: healthSeries, showSymbols: showSymbols)
+                    .frame(height: 160)
             }
         }
         .dbCard()
-        .onAppear { reload() }
-        .onReceive(tick) { _ in reload() }
+        .task(id: range) {
+            await reload()
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                await reload()
+            }
+        }
     }
 
-    private func reload() {
-        let since = Date().addingTimeInterval(-range.seconds)
-        let pts = HistoryStore.shared.points(deviceId: deviceId, since: since)
-        if pts.count != points.count { points = pts }
+    private func reload() async {
+        let since = Date.now.addingTimeInterval(-range.seconds)
+        let pts = await HistoryStore.shared.pointsAsync(deviceId: deviceId, since: since)
+        let charge = pts.filter { $0.chargePercent != nil }
+        let health = pts.filter { $0.healthPercent != nil }
+        let newest = pts.last?.timestamp
+        if newest != lastTimestamp || charge.count != chargeSeries.count || health.count != healthSeries.count {
+            chargeSeries = charge
+            healthSeries = health
+            lastTimestamp = newest
+        }
+    }
+}
+
+struct HistoryChartBody: View, Equatable {
+    let charge: [HistoryPoint]
+    let health: [HistoryPoint]
+    let showSymbols: Bool
+
+    static func == (lhs: HistoryChartBody, rhs: HistoryChartBody) -> Bool {
+        lhs.showSymbols == rhs.showSymbols
+            && lhs.charge.count == rhs.charge.count
+            && lhs.health.count == rhs.health.count
+            && lhs.charge.last?.timestamp == rhs.charge.last?.timestamp
+            && lhs.health.last?.timestamp == rhs.health.last?.timestamp
+    }
+
+    var body: some View {
+        Chart {
+            ForEach(charge, id: \.timestamp) { p in
+                LineMark(x: .value("t", p.timestamp),
+                         y: .value("%", p.chargePercent ?? 0),
+                         series: .value("s", "charge"))
+                    .foregroundStyle(by: .value("Serie", "Carica %"))
+                    .interpolationMethod(.linear)
+                    .symbol(showSymbols ? .circle : .square)
+                    .symbolSize(showSymbols ? 18 : 0)
+            }
+            ForEach(health, id: \.timestamp) { p in
+                LineMark(x: .value("t", p.timestamp),
+                         y: .value("%", p.healthPercent ?? 0),
+                         series: .value("s", "health"))
+                    .foregroundStyle(by: .value("Serie", "Salute %"))
+                    .interpolationMethod(.linear)
+                    .symbol(showSymbols ? .circle : .square)
+                    .symbolSize(showSymbols ? 18 : 0)
+            }
+        }
+        .chartForegroundStyleScale([
+            "Carica %": Color.dbAccent2,
+            "Salute %": Color.dbAccent
+        ])
+        .chartYScale(domain: 0...105)
     }
 }
 

@@ -1,7 +1,7 @@
 import Foundation
 
-struct IOSDevice: Identifiable, Hashable {
-    enum Connection: String { case usb = "USB", network = "Wi-Fi" }
+struct IOSDevice: Identifiable, Hashable, Sendable {
+    enum Connection: String, Sendable { case usb = "USB", network = "Wi-Fi" }
     var id: String { udid }
     let udid: String
     let connection: Connection
@@ -13,7 +13,7 @@ struct IOSDevice: Identifiable, Hashable {
     let unreachableReason: String?
 }
 
-struct IOSAdapterInfo {
+struct IOSAdapterInfo: Sendable {
     let watts: Int?
     let description: String?
     let voltageV: Double?
@@ -21,7 +21,7 @@ struct IOSAdapterInfo {
     let isWireless: Bool?
 }
 
-struct IOSBatterySnapshot {
+struct IOSBatterySnapshot: Sendable {
     let timestamp: Date
     let chargePercent: Int
     let isCharging: Bool
@@ -43,9 +43,16 @@ struct IOSBatterySnapshot {
     let diagnostic: IOSDiagnosticInfo
 }
 
-struct IOSDiagnosticInfo {
+struct IOSDiagnosticInfo: Sendable {
     let batteryDomainRaw: String
-    let ioregAttempts: [(className: String, stdout: String, stderr: String)]
+    let ioregAttempts: [IORegAttempt]
+}
+
+struct IORegAttempt: Sendable, Identifiable {
+    let id = UUID()
+    let className: String
+    let stdout: String
+    let stderr: String
 }
 
 enum LibIMobileStatus {
@@ -120,28 +127,33 @@ enum IOSDeviceReader {
         var serialIO: String?
         var mfg: String?
         var adapter: IOSAdapterInfo?
-        var attempts: [(String, String, String)] = []
+        var attempts: [IORegAttempt] = []
 
         let diagBin = "\(bin)/idevicediagnostics"
         if FileManager.default.isExecutableFile(atPath: diagBin) {
             for klass in ["AppleSmartBattery", "IOPMPowerSource", "AppleARMPMUCharger"] {
                 let res = run(diagBin, ["-u", device.udid] + netFlag + ["ioregentry", klass])
-                attempts.append((klass, res.stdout, res.stderr))
+                attempts.append(IORegAttempt(className: klass, stdout: res.stdout, stderr: res.stderr))
                 if let dict = parsePlistXML(res.stdout) {
                     let entry = extractBatteryEntry(dict)
                     if !entry.isEmpty {
-                        cycles = (entry["CycleCount"] as? Int) ?? cycles
-                        design = (entry["DesignCapacity"] as? Int)
-                            ?? (entry["NominalChargeCapacity"] as? Int) ?? design
-                        nominal = (entry["AppleRawMaxCapacity"] as? Int)
-                            ?? (entry["MaxCapacity"] as? Int) ?? nominal
-                        absolute = (entry["AppleRawCurrentCapacity"] as? Int)
-                            ?? (entry["AbsoluteCapacity"] as? Int) ?? absolute
-                        if let v = entry["Voltage"] as? Int { voltage = Double(v) / 1000.0 }
-                        if let a = entry["Amperage"] as? Int {
-                            amperage = Double(Int32(truncatingIfNeeded: a)) / 1000.0
+                        if let c = entry["CycleCount"] as? Int, (0...10_000).contains(c) { cycles = c }
+                        if let d = (entry["DesignCapacity"] as? Int) ?? (entry["NominalChargeCapacity"] as? Int),
+                           (100...50_000).contains(d) { design = d }
+                        if let n = (entry["AppleRawMaxCapacity"] as? Int) ?? (entry["MaxCapacity"] as? Int),
+                           (100...50_000).contains(n) { nominal = n }
+                        if let a = (entry["AppleRawCurrentCapacity"] as? Int) ?? (entry["AbsoluteCapacity"] as? Int),
+                           (0...50_000).contains(a) { absolute = a }
+                        if let v = entry["Voltage"] as? Int, (1_000...20_000).contains(v) {
+                            voltage = Double(v) / 1000.0
                         }
-                        if let t = entry["Temperature"] as? Int { tempC = Double(t) / 100.0 }
+                        if let a = entry["Amperage"] as? Int {
+                            let signed = Int(Int32(truncatingIfNeeded: a))
+                            if (-30_000...30_000).contains(signed) { amperage = Double(signed) / 1000.0 }
+                        }
+                        if let t = entry["Temperature"] as? Int, (-5_000...12_000).contains(t) {
+                            tempC = Double(t) / 100.0
+                        }
                         if let s = entry["BatterySerialNumber"] as? String { serialIO = sanitizeASCII(s) }
                         if let s = entry["Serial"] as? String, serialIO == nil { serialIO = sanitizeASCII(s) }
                         if let m = entry["Manufacturer"] as? String { mfg = sanitizeASCII(m) }

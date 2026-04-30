@@ -80,7 +80,11 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --sign - "$APP_BUNDLE" 2>/dev/null || true
+if ! codesign --force --options runtime \
+              --entitlements DoctorBattery.entitlements \
+              --sign - "$APP_BUNDLE"; then
+    echo "WARN: codesign failed (continuing)"
+fi
 
 echo "Done: $APP_BUNDLE"
 echo "Architectures:"

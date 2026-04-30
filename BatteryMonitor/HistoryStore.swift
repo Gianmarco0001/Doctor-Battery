@@ -17,7 +17,7 @@ struct HistoryPoint {
     let isCharging: Bool?
 }
 
-final class HistoryStore {
+final class HistoryStore: @unchecked Sendable {
     static let shared = HistoryStore()
     private var db: OpaquePointer?
     private let queue = DispatchQueue(label: "history.store")
@@ -125,6 +125,46 @@ final class HistoryStore {
             else { sqlite3_bind_null(stmt, 12) }
             sqlite3_step(stmt)
         }
+    }
+
+    func pointsAsync(deviceId: String, since: Date) async -> [HistoryPoint] {
+        await withCheckedContinuation { (cont: CheckedContinuation<[HistoryPoint], Never>) in
+            queue.async { [weak self] in
+                cont.resume(returning: self?.pointsLocked(deviceId: deviceId, since: since) ?? [])
+            }
+        }
+    }
+
+    private func pointsLocked(deviceId: String, since: Date) -> [HistoryPoint] {
+        var result: [HistoryPoint] = []
+        guard let db = self.db else { return result }
+        var stmt: OpaquePointer?
+        let sql = """
+            SELECT ts, charge_pct, health_pct, cycle_count, current_cap, max_cap,
+                   voltage, amperage, wattage, temperature, is_charging
+            FROM snapshots WHERE device_id = ? AND ts >= ? ORDER BY ts ASC;
+        """
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) != SQLITE_OK { return result }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, deviceId, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_double(stmt, 2, since.timeIntervalSince1970)
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            result.append(HistoryPoint(
+                timestamp: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 0)),
+                chargePercent: optDouble(stmt, 1),
+                healthPercent: optDouble(stmt, 2),
+                cycleCount: optInt(stmt, 3),
+                currentCapacity: optInt(stmt, 4),
+                maxCapacity: optInt(stmt, 5),
+                voltage: optDouble(stmt, 6),
+                amperage: optDouble(stmt, 7),
+                wattage: optDouble(stmt, 8),
+                temperature: optDouble(stmt, 9),
+                isCharging: sqlite3_column_type(stmt, 10) == SQLITE_NULL ? nil
+                    : sqlite3_column_int(stmt, 10) != 0
+            ))
+        }
+        return result
     }
 
     func points(deviceId: String, since: Date) -> [HistoryPoint] {

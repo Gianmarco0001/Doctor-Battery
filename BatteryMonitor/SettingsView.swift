@@ -13,6 +13,7 @@ enum SettingsKeys {
     static let preferredLanguage = "preferredLanguage"
 }
 
+@MainActor
 final class SettingsModel: ObservableObject {
     @Published var logIntervalMin: Int {
         didSet { UserDefaults.standard.set(logIntervalMin, forKey: SettingsKeys.logIntervalMin) }
@@ -70,7 +71,7 @@ final class SettingsModel: ObservableObject {
 }
 
 struct SettingsView: View {
-    @ObservedObject var model = SettingsModel.shared
+    @StateObject private var model = SettingsModel.shared
     @State private var langSelection: String = (UserDefaults.standard.array(forKey: "AppleLanguages") as? [String])?.first ?? ""
 
     var body: some View {
@@ -195,7 +196,8 @@ struct SettingsView: View {
             Spacer()
             Toggle("", isOn: binding)
                 .labelsHidden()
-                .toggleStyle(SwitchToggleStyle(tint: Color.dbAccent))
+                .toggleStyle(.switch)
+                .tint(Color.dbAccent)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -293,7 +295,8 @@ struct SettingsView: View {
         task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         task.arguments = ["-n", url.path]
         try? task.run()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
             NSApp.terminate(nil)
         }
     }

@@ -23,12 +23,12 @@ private let kHIDUsage_AppleVendor_TemperatureSensor: Int = 0x0005
 private let kIOHIDEventTypeTemperature: Int32 = 15
 private let kIOHIDEventFieldTemperatureLevel: Int32 = (kIOHIDEventTypeTemperature << 16)
 
-struct SystemTemperatureReading {
+struct SystemTemperatureReading: Sendable {
     let name: String
     let value: Double
 }
 
-struct SystemTemperatureSummary {
+struct SystemTemperatureSummary: Sendable, Equatable {
     let all: [SystemTemperatureReading]
     let cpuAvg: Double?
     let cpuMax: Double?
@@ -38,9 +38,11 @@ struct SystemTemperatureSummary {
     let nandMax: Double?
 }
 
+extension SystemTemperatureReading: Equatable {}
+
 enum SystemTemperatures {
     private static let lock = NSLock()
-    private static var cachedClient: AnyObject?
+    nonisolated(unsafe) private static var cachedClient: AnyObject?
 
     private static func sharedClient() -> AnyObject? {
         lock.lock()
