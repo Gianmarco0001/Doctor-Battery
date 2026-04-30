@@ -35,7 +35,9 @@ final class AppViewModel: ObservableObject {
     private var anomalyTimer: Timer?
     private var lastLoggedMac: Date = .distantPast
     private var lastLoggedIOS: [String: Date] = [:]
-    private let logInterval: TimeInterval = 5 * 60
+    private var logInterval: TimeInterval {
+        TimeInterval(max(1, SettingsModel.shared.logIntervalMin)) * 60
+    }
     private let iosQueue = DispatchQueue(label: "doctorbattery.ios", qos: .userInitiated)
     private var iosRefreshInFlight = false
     private var deviceScanInFlight = false
