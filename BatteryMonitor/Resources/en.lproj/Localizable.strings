@@ -123,3 +123,5 @@
 "OK" = "OK";
 "Range ottimale" = "Optimal range";
 "%d rimasti · ~%.1f anni" = "%d left · ~%.1f years";
+"Salute ottimale" = "Optimal health";
+"Nessun trend di degrado rilevato — continua a monitorare nel tempo." = "No degradation trend detected — keep monitoring over time.";

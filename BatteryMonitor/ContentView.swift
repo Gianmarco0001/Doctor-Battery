@@ -1404,7 +1404,9 @@ struct ForecastCard: View {
             guard let h = p.healthPercent else { return nil }
             return (p.timestamp, h)
         }
-        if series.count >= 2 {
+        let hasMeaningfulTrend = forecast.confidence >= 0.05 && abs(forecast.slopePerDay) > 0.001
+        if series.count >= 2 && hasMeaningfulTrend {
+            let minY = max(0.0, (series.map(\.1).min() ?? 80) - 5)
             Chart {
                 ForEach(series, id: \.0) { p in
                     AreaMark(x: .value("t", p.0), y: .value("Salute", p.1))
@@ -1418,13 +1420,29 @@ struct ForecastCard: View {
                         .lineStyle(StrokeStyle(lineWidth: 1.6))
                 }
             }
-            .chartYScale(domain: max(60, forecast.currentHealth - 10)...105)
+            .chartYScale(domain: minY...105)
             .frame(height: 180)
+        } else if series.count >= 2 {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(Color.dbAccent)
+                    .font(.system(size: 24))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(NSLocalizedString("Salute ottimale", comment: ""))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.dbText)
+                    Text(NSLocalizedString("Nessun trend di degrado rilevato — continua a monitorare nel tempo.", comment: ""))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.dbText3)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: 80)
         } else {
             Text(NSLocalizedString("Dati insufficienti per la previsione", comment: ""))
                 .font(.system(size: 11))
                 .foregroundStyle(Color.dbText3)
-                .frame(maxWidth: .infinity, minHeight: 100)
+                .frame(maxWidth: .infinity, minHeight: 80)
         }
     }
 }
