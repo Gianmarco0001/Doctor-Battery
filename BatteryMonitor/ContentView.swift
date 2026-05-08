@@ -1406,22 +1406,32 @@ struct ForecastCard: View {
         }
         let hasMeaningfulTrend = forecast.confidence >= 0.05 && abs(forecast.slopePerDay) > 0.001
         if series.count >= 2 && hasMeaningfulTrend {
-            let minY = max(0.0, (series.map(\.1).min() ?? 80) - 5)
+            let minHealth = series.map(\.1).min() ?? 80
+            let minY = max(60.0, floor(minHealth) - 1)
             Chart {
                 ForEach(series, id: \.0) { p in
-                    AreaMark(x: .value("t", p.0), y: .value("Salute", p.1))
-                        .foregroundStyle(LinearGradient(
-                            colors: [Color.dbAccent.opacity(0.45), Color.dbAccent.opacity(0.0)],
-                            startPoint: .top, endPoint: .bottom))
-                        .interpolationMethod(.linear)
                     LineMark(x: .value("t", p.0), y: .value("Salute", p.1))
                         .foregroundStyle(Color.dbAccent)
                         .interpolationMethod(.linear)
-                        .lineStyle(StrokeStyle(lineWidth: 1.6))
+                        .lineStyle(StrokeStyle(lineWidth: 1.8))
+                }
+                if let lastObs = series.last, let target = forecast.dateAtThreshold {
+                    LineMark(x: .value("t", lastObs.0), y: .value("Salute", lastObs.1),
+                             series: .value("s", "trend"))
+                        .foregroundStyle(Color.dbAccent2.opacity(0.7))
+                        .lineStyle(StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
+                    LineMark(x: .value("t", target), y: .value("Salute", 80.0),
+                             series: .value("s", "trend"))
+                        .foregroundStyle(Color.dbAccent2.opacity(0.7))
+                        .lineStyle(StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
+                    RuleMark(y: .value("Soglia", 80.0))
+                        .foregroundStyle(Color.dbWarn.opacity(0.4))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 4]))
                 }
             }
-            .chartYScale(domain: minY...105)
+            .chartYScale(domain: minY...100.5)
             .frame(height: 180)
+            .clipped()
         } else if series.count >= 2 {
             HStack(spacing: 12) {
                 Image(systemName: "checkmark.seal.fill")
